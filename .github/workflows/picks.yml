@@ -1,0 +1,33 @@
+name: Weekly Picks (JST Mon 08:00)
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "0 23 * * SUN" # 08:00 Monday JST
+
+concurrency:
+  group: weekly-picks
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  picks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - name: Install deps
+        run: uv sync --no-dev
+      - name: Generate placeholder picks
+        run: uv run llm-trader-battle generate-picks
+      - name: Commit and push
+        env:
+          TZ: UTC
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/weeks
+          git commit -m "chore: add picks for week $(date -u +%F)" || exit 0
+          git push

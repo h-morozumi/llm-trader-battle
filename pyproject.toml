@@ -1,0 +1,22 @@
+[project]
+name = "llm-trader-battle"
+version = "0.1.0"
+description = "LLMごとの日本株ピック結果を週次で比較するトレーダーバトル"
+readme = "README.md"
+authors = [
+    { name = "h-morozumi" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "pandas>=2.2",
+    "yfinance>=0.2.43",
+    "jpholiday>=0.1.9",
+    "matplotlib>=3.9",
+]
+
+[project.scripts]
+llm-trader-battle = "llm_trader_battle.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.9.16,<0.10.0"]
+build-backend = "uv_build"
