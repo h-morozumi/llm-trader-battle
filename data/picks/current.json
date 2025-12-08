@@ -1,0 +1,54 @@
+{
+  "week_start": "2025-12-07",
+  "picked_at_utc": "2025-12-08T17:44:17.614669+00:00",
+  "picks": {
+    "gpt": [
+      {
+        "symbol": "4502.T",
+        "reason": "構造的なテーマ追い風（半導体/AI）",
+        "symbol_index": 0
+      },
+      {
+        "symbol": "8267.T",
+        "reason": "配当利回りが市場平均を上回る",
+        "symbol_index": 1
+      }
+    ],
+    "gemini": [
+      {
+        "symbol": "2802.T",
+        "reason": "配当利回りが市場平均を上回る",
+        "symbol_index": 0
+      },
+      {
+        "symbol": "6098.T",
+        "reason": "構造的なテーマ追い風（半導体/AI）",
+        "symbol_index": 1
+      }
+    ],
+    "claude": [
+      {
+        "symbol": "8316.T",
+        "reason": "構造的なテーマ追い風（半導体/AI）",
+        "symbol_index": 0
+      },
+      {
+        "symbol": "6758.T",
+        "reason": "EPS 成長とROEが同業比優位",
+        "symbol_index": 1
+      }
+    ],
+    "grok": [
+      {
+        "symbol": "6861.T",
+        "reason": "EPS 成長とROEが同業比優位",
+        "symbol_index": 0
+      },
+      {
+        "symbol": "6752.T",
+        "reason": "構造的なテーマ追い風（半導体/AI）",
+        "symbol_index": 1
+      }
+    ]
+  }
+}
