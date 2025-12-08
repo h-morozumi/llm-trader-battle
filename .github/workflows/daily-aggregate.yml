@@ -1,0 +1,45 @@
+name: Daily Aggregate (JST 17:00)
+
+on:
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "Target date (YYYY-MM-DD, JST)"
+        required: false
+        type: string
+  schedule:
+    - cron: "0 8 * * *" # 17:00 JST daily
+
+concurrency:
+  group: daily-aggregate
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  aggregate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - name: Install deps
+        run: uv sync --no-dev
+      - name: Aggregate daily returns
+        env:
+          DATE: ${{ github.event.inputs.date || '' }}
+        run: |
+          if [ -n "$DATE" ]; then
+            uv run llm-trader-battle aggregate-daily --date "$DATE"
+          else
+            uv run llm-trader-battle aggregate-daily
+          fi
+      - name: Commit and push
+        env:
+          TZ: UTC
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/result reports
+          git commit -m "chore: add daily results $(date -u +%F)" || exit 0
+          git push

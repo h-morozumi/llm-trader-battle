@@ -2,152 +2,168 @@ from __future__ import annotations
 
 import argparse
 from datetime import date, timedelta
-from pathlib import Path
-from typing import List, Sequence
+from typing import Dict, List, Sequence
 
 from .config import DEFAULT_LLMS, JST
-from .market_calendar import next_trading_day, week_window_for
-from .picks import generate_stub_picks, load_picks
-from .prices import fetch_open_close, load_prices, save_prices
+from .market_calendar import next_monday, week_start_for, is_trading_day
+from .picks import generate_stub_picks, load_current_picks, save_week_and_current, week_dir_from_id
+from .prices import fetch_open_close, load_daily_prices, save_daily_prices
 from .report import (
     compute_llm_avg,
-    compute_llm_overall,
-    compute_returns,
+    find_week_buy_prices,
     plot_llm_bar,
     plot_llm_line,
-    summarize_week,
-    save_week_report,
-    update_summary,
+    save_daily_result,
+    summarize_daily,
+    update_month_summary,
 )
-from .storage import DATA_DIR, REPORTS_DIR, ensure_week_dir, load_json_optional
+from .storage import PICKS_DIR, PRICES_DIR, RESULTS_DIR, REPORTS_DIR, load_json_optional
 
 
-def week_dir_for(week: str) -> Path:
-    return DATA_DIR / "weeks" / week
-
-
-def parse_week(value: str | None) -> str:
+def parse_date(value: str | None) -> date:
     if value:
-        return value
+        return date.fromisoformat(value)
     from .config import now_jst
 
-    window = week_window_for(now_jst())
-    return window.week_start.isoformat()
+    return now_jst().date()
 
 
-def handle_generate_picks(args: argparse.Namespace) -> None:
-    week = parse_week(args.week)
-    week_dir = week_dir_for(week)
-    generate_stub_picks(week_dir, models=args.llms or DEFAULT_LLMS)
-    print(f"picks saved to {week_dir / 'picks.json'}")
+def handle_predict(args: argparse.Namespace) -> None:
+    target_monday = date.fromisoformat(args.week_start) if args.week_start else next_monday(parse_date(None))
+    week_id = target_monday.isoformat()
+    picks = generate_stub_picks(week_dir_from_id(week_id), models=args.llms or DEFAULT_LLMS)
+    save_week_and_current(week_id, picks)
+    print(f"picks saved to {PICKS_DIR / week_id} and current.json")
 
 
-def handle_fetch_open(args: argparse.Namespace) -> None:
-    week = parse_week(args.week)
-    week_dir = week_dir_for(week)
-    week_start = date.fromisoformat(week)
-    open_date = next_trading_day(week_start)
-    picks = load_picks(week_dir)
+def handle_fetch_daily(args: argparse.Namespace) -> None:
+    target = parse_date(args.date)
+    if not is_trading_day(target):
+        print(f"{target} is not a trading day; skip fetch")
+        return
+    picks = load_current_picks()
     if not picks:
-        raise SystemExit("picks.json is missing; run generate-picks first")
+        raise SystemExit("current picks not found; run predict first")
     symbols = {s for p in picks for s in p.symbols}
     if not symbols:
         raise SystemExit("no symbols to fetch")
-    prices = fetch_open_close(symbols, open_date, open_date)
-    save_prices(week_dir, "prices_open", prices)
-    print(f"open prices saved to {week_dir / 'prices_open.json'}")
+    prices = fetch_open_close(symbols, target)
+    save_daily_prices(target, prices)
+    print(f"prices saved to {PRICES_DIR / target.isoformat() / 'prices.json'}")
 
 
-def handle_fetch_close(args: argparse.Namespace) -> None:
-    week = parse_week(args.week)
-    week_dir = week_dir_for(week)
-    week_start = date.fromisoformat(week)
-    open_date = next_trading_day(week_start)
-    close_date = next_trading_day(week_start + timedelta(days=4))
-    picks = load_picks(week_dir)
+def handle_aggregate_daily(args: argparse.Namespace) -> None:
+    target = parse_date(args.date)
+    if not is_trading_day(target):
+        print(f"{target} is not a trading day; skip aggregate")
+        return
+    week_start = week_start_for(target)
+    picks = load_current_picks()
     if not picks:
-        raise SystemExit("picks.json is missing; run generate-picks first")
-    symbols = {s for p in picks for s in p.symbols}
-    if not symbols:
-        raise SystemExit("no symbols to fetch")
-    fresh = fetch_open_close(symbols, open_date, close_date)
-    existing_open = load_prices(week_dir, "prices_open") or {}
-    merged = {}
-    for sym in symbols:
-        merged[sym] = {
-            "open": existing_open.get(sym, {}).get("open") or fresh.get(sym, {}).get("open"),
-            "close": fresh.get(sym, {}).get("close"),
+        raise SystemExit("current picks not found; run predict first")
+    today_prices = load_daily_prices(target)
+    if not today_prices:
+        raise SystemExit("today's prices not found; run fetch-daily first")
+    symbols = [s for p in picks for s in p.symbols]
+    buy_prices = find_week_buy_prices(symbols, week_start, target)
+    returns_per_symbol: Dict[str, Dict[str, float | None]] = {}
+    for s in symbols:
+        returns_per_symbol[s] = {
+            "buy_open": buy_prices.get(s),
+            "close": today_prices.get(s, {}).get("close") if isinstance(today_prices.get(s), dict) else None,
         }
-    save_prices(week_dir, "prices", merged)
-    print(f"final prices saved to {week_dir / 'prices.json'}")
 
+    pick_dicts = [{"model": p.model, "symbols": p.symbols} for p in picks]
+    content = summarize_daily(target, pick_dicts, today_prices, {s: returns_per_symbol[s]["buy_open"] for s in returns_per_symbol})
+    llm_avg: Dict[str, float | None] = {}
+    for p in picks:
+        vals = []
+        for s in p.symbols:
+            buy = returns_per_symbol[s]["buy_open"]
+            close = returns_per_symbol[s]["close"]
+            if buy is not None and close is not None:
+                vals.append((close - buy) / buy)
+        llm_avg[p.model] = sum(vals) / len(vals) if vals else None
 
-def handle_report(args: argparse.Namespace) -> None:
-    week = parse_week(args.week)
-    week_dir = week_dir_for(week)
-    picks = load_json_optional(week_dir / "picks.json") or []
-    prices = load_prices(week_dir, "prices") or {}
-    content = summarize_week(week, picks, prices)
+    payload = {
+        "date": target.isoformat(),
+        "llm_avg": llm_avg,
+        "per_symbol": returns_per_symbol,
+    }
+    save_daily_result(target, content, payload)
 
-    # chart for current week
-    returns = compute_returns(prices)
-    llm_avg_current = compute_llm_avg(picks, returns)
-    week_chart_path = week_dir / "llm_week.png"
-    valid_week = {k: v for k, v in llm_avg_current.items() if v is not None}
-    plot_llm_bar(valid_week, f"LLM Avg Returns ({week})", week_chart_path)
-    if week_chart_path.exists():
-        content += f"\n![LLM weekly returns]({week_chart_path.name})\n"
-    save_week_report(week_dir, content)
-
-    # update summary across weeks (per LLM)
-    all_weeks: List[str] = []
+    # monthly summary update
+    month = target.strftime("%Y%m")
+    month_prefix = target.strftime("%Y-%m")
+    daily_llm: Dict[str, Dict[str, float | None]] = {}
     llm_names: set[str] = set()
-    summaries: Dict[str, Dict[str, float | None]] = {}
-    for child in (DATA_DIR / "weeks").glob("*"):
-        if child.is_dir():
-            w = child.name
-            all_weeks.append(w)
-            picks_candidate = load_json_optional(child / "picks.json") or []
-            prices_candidate = load_json_optional(child / "prices.json") or {}
-            r = compute_returns(prices_candidate)
-            scores = compute_llm_avg(picks_candidate, r)
-            summaries[w] = scores
-            llm_names.update(scores.keys())
-    # ensure current week is included even if not yet saved under data/weeks
-    if week not in summaries:
-        summaries[week] = llm_avg_current
-    llm_names.update(llm_avg_current.keys())
+    for child in RESULTS_DIR.glob("result-*.json"):
+        day = child.stem.replace("result-", "")
+        if not day.startswith(month_prefix):
+            continue
+        data = load_json_optional(child) or {}
+        llm_avg_day = data.get("llm_avg", {})
+        daily_llm[day] = llm_avg_day
+        llm_names.update(llm_avg_day.keys())
+    # ensure current day is included
+    daily_llm[target.isoformat()] = llm_avg
+    llm_names.update(llm_avg.keys())
+    # 非取引日（全LLM None）をグラフ・表から除外して間延びを防ぐ
+    filtered_daily_llm = {d: v for d, v in daily_llm.items() if any(val is not None for val in v.values())}
     llm_list = sorted(llm_names)
 
-    # overall chart across weeks per LLM
-    overall = compute_llm_overall(summaries)
-    summary_chart = REPORTS_DIR / "summary.png"
-    plot_llm_line(all_weeks, llm_list, summaries, "LLM Avg Returns by Week", summary_chart)
+    # holdings (week start→end, per model)
+    holdings: list[dict[str, str]] = []
+    for picks_file in PICKS_DIR.glob("picks-*.json"):
+        week_id = picks_file.stem.replace("picks-", "")
+        if not week_id.startswith(month_prefix):
+            continue
+        picks_data = load_json_optional(picks_file) or {}
+        picks_map = picks_data.get("picks", {}) if isinstance(picks_data, dict) else {}
+        week_start = week_id
+        week_end = (date.fromisoformat(week_id) + timedelta(days=4)).isoformat()
+        for model, entries in picks_map.items():
+            if not isinstance(entries, list):
+                continue
+            syms = [e.get("symbol", "") for e in entries if isinstance(e, dict)]
+            holdings.append(
+                {
+                    "week_start": week_start,
+                    "week_end": week_end,
+                    "model": str(model),
+                    "symbols": ", ".join(syms),
+                }
+            )
 
-    update_summary(all_weeks, llm_list, summaries, chart_path=summary_chart if summary_chart.exists() else None)
-    print(f"report saved to {week_dir / 'result.md'} and {REPORTS_DIR / 'summary.md'}")
+    chart_path = REPORTS_DIR / month / "summary.png"
+    days_sorted = sorted(filtered_daily_llm.keys())
+    plot_llm_line(days_sorted, llm_list, filtered_daily_llm, f"LLM Returns {month}", chart_path, even_spacing=True)
+    update_month_summary(
+        month,
+        llm_list,
+        filtered_daily_llm,
+        chart_path=chart_path if chart_path.exists() else None,
+        holdings=holdings if holdings else None,
+    )
+    print(f"results saved to {RESULTS_DIR / target.isoformat()} and reports/{month}/summary.md")
 
 
 def main(argv: Sequence[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(description="LLM trader battle utilities")
+    parser = argparse.ArgumentParser(description="LLM trader battle utilities (daily flow)")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    p_pick = sub.add_parser("generate-picks", help="Generate placeholder picks (replace with real LLM calls)")
-    p_pick.add_argument("--week", type=str, help="Week start date (YYYY-MM-DD, Monday in JST)")
+    p_pick = sub.add_parser("predict", help="Generate picks for upcoming week (run on weekend)")
+    p_pick.add_argument("--week-start", type=str, help="Week start Monday (YYYY-MM-DD). Default: next Monday from today (JST)")
     p_pick.add_argument("--llms", nargs="+", help="LLM model names")
-    p_pick.set_defaults(func=handle_generate_picks)
+    p_pick.set_defaults(func=handle_predict)
 
-    p_open = sub.add_parser("fetch-open", help="Fetch Monday open prices")
-    p_open.add_argument("--week", type=str, help="Week start date (YYYY-MM-DD)")
-    p_open.set_defaults(func=handle_fetch_open)
+    p_fetch = sub.add_parser("fetch-daily", help="Fetch today's open/close for current picks")
+    p_fetch.add_argument("--date", type=str, help="Target date (YYYY-MM-DD, JST)")
+    p_fetch.set_defaults(func=handle_fetch_daily)
 
-    p_close = sub.add_parser("fetch-close", help="Fetch Friday close prices and merge")
-    p_close.add_argument("--week", type=str, help="Week start date (YYYY-MM-DD)")
-    p_close.set_defaults(func=handle_fetch_close)
-
-    p_report = sub.add_parser("report", help="Generate weekly and cumulative reports")
-    p_report.add_argument("--week", type=str, help="Week start date (YYYY-MM-DD)")
-    p_report.set_defaults(func=handle_report)
+    p_agg = sub.add_parser("aggregate-daily", help="Aggregate returns using first trading day's open and today's close")
+    p_agg.add_argument("--date", type=str, help="Target date (YYYY-MM-DD, JST)")
+    p_agg.set_defaults(func=handle_aggregate_daily)
 
     args = parser.parse_args(argv)
     args.func(args)

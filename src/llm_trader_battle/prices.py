@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from pathlib import Path
 from typing import Dict, Iterable
 
 import pandas as pd
 import yfinance as yf
 
 from .config import JST, UTC
-from .storage import dump_json, ensure_week_dir, load_json_optional
+from .storage import PRICES_DIR, dump_json, load_json_optional, flat_prices_json_path
 
 
 def _fetch_daily(symbols: Iterable[str], start: date, end: date) -> pd.DataFrame:
@@ -41,21 +42,28 @@ def _extract_price(df: pd.DataFrame, symbol: str, d: date, field: str) -> float 
         return None
 
 
-def fetch_open_close(symbols: Iterable[str], open_date: date, close_date: date) -> Dict[str, Dict[str, float | None]]:
-    df = _fetch_daily(symbols, open_date, close_date)
+def fetch_open_close(symbols: Iterable[str], target_date: date) -> Dict[str, Dict[str, float | None]]:
+    df = _fetch_daily(symbols, target_date, target_date)
     result: Dict[str, Dict[str, float | None]] = {}
     for symbol in symbols:
         result[symbol] = {
-            "open": _extract_price(df, symbol, open_date, "Open"),
-            "close": _extract_price(df, symbol, close_date, "Close"),
+            "open": _extract_price(df, symbol, target_date, "Open"),
+            "high": _extract_price(df, symbol, target_date, "High"),
+            "low": _extract_price(df, symbol, target_date, "Low"),
+            "close": _extract_price(df, symbol, target_date, "Close"),
         }
     return result
 
 
-def save_prices(week_dir, name: str, payload) -> None:
-    ensure_week_dir(week_dir)
-    dump_json(week_dir / f"{name}.json", payload)
+def daily_path(d: date) -> Path:
+    return PRICES_DIR / d.isoformat() / "prices.json"
 
 
-def load_prices(week_dir, name: str):
-    return load_json_optional(week_dir / f"{name}.json")
+def save_daily_prices(d: date, payload) -> None:
+    dump_json(flat_prices_json_path(d), payload)
+    dump_json(flat_prices_json_path(d), payload)
+
+
+def load_daily_prices(d: date):
+    return load_json_optional(flat_prices_json_path(d))
+

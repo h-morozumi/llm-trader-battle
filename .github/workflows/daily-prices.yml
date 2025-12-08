@@ -1,0 +1,45 @@
+name: Daily Prices (JST 16:00)
+
+on:
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "Target date (YYYY-MM-DD, JST)"
+        required: false
+        type: string
+  schedule:
+    - cron: "0 7 * * *" # 16:00 JST daily
+
+concurrency:
+  group: daily-prices
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  prices:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - name: Install deps
+        run: uv sync --no-dev
+      - name: Fetch daily open/close
+        env:
+          DATE: ${{ github.event.inputs.date || '' }}
+        run: |
+          if [ -n "$DATE" ]; then
+            uv run llm-trader-battle fetch-daily --date "$DATE"
+          else
+            uv run llm-trader-battle fetch-daily
+          fi
+      - name: Commit and push
+        env:
+          TZ: UTC
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/prices
+          git commit -m "chore: add daily prices $(date -u +%F)" || exit 0
+          git push
