@@ -169,12 +169,10 @@ def summarize_daily(target_date: date, picks: List[dict], prices_today: Dict[str
     if llms:
         _append_models_section(lines, llms)
 
-    lines.append("| LLM | Symbol 1 | Symbol 2 | Buy(Open) | Close(today) | Return |")
-    lines.append("| --- | --- | --- | --- | --- | --- |")
+    lines.append("| LLM | Symbol | Buy(Open) | Close(today) | Return |")
+    lines.append("| --- | --- | --- | --- | --- |")
     for pick in picks:
         symbols = pick["symbols"]
-        s1_disp = _format_symbol(symbols[0])
-        s2_disp = _format_symbol(symbols[1])
         b1 = buy_prices.get(symbols[0])
         c1 = prices_today.get(symbols[0], {}).get("close")
         r1 = returns.get(symbols[0])
@@ -186,24 +184,24 @@ def summarize_daily(target_date: date, picks: List[dict], prices_today: Dict[str
         if valid:
             avg_ret = sum(valid) / len(valid)
         lines.append(
-            "| {model} | {s1} | {s2} | {b1:.2f} | {c1:.2f} | {r1:.2%} |".format(
+            "| {model} | {sym} | {b:.2f} | {c:.2f} | {r:.2%} |".format(
                 model=pick["model"],
-                s1=s1_disp,
-                s2=s2_disp,
-                b1=b1 or 0.0,
-                c1=c1 or 0.0,
-                r1=r1 or 0.0,
+                sym=_format_symbol(symbols[0]),
+                b=b1 or 0.0,
+                c=c1 or 0.0,
+                r=r1 or 0.0,
             )
         )
         lines.append(
-            "|  |  |  | {b2:.2f} | {c2:.2f} | {r2:.2%} |".format(
-                b2=b2 or 0.0,
-                c2=c2 or 0.0,
-                r2=r2 or 0.0,
+            "|  | {sym} | {b:.2f} | {c:.2f} | {r:.2%} |".format(
+                sym=_format_symbol(symbols[1]),
+                b=b2 or 0.0,
+                c=c2 or 0.0,
+                r=r2 or 0.0,
             )
         )
         avg_str = f"{avg_ret:.2%}" if avg_ret is not None else "N/A"
-        lines.append(f"|  |  |  |  |  | Avg: {avg_str} |")
+        lines.append(f"|  | Avg |  |  | {avg_str} |")
     lines.append("")
     return "\n".join(lines)
 
@@ -218,12 +216,10 @@ def summarize_week(week: str, picks: List[dict], prices: Dict[str, Dict[str, flo
     if llms:
         _append_models_section(lines, llms)
 
-    lines.append("| LLM | Symbol 1 | Symbol 2 | Open | Close | Return |")
-    lines.append("| --- | --- | --- | --- | --- | --- |")
+    lines.append("| LLM | Symbol | Open | Close | Return |")
+    lines.append("| --- | --- | --- | --- | --- |")
     for pick in picks:
         symbols = pick["symbols"]
-        s1_disp = _format_symbol(symbols[0])
-        s2_disp = _format_symbol(symbols[1])
         open1 = prices.get(symbols[0], {}).get("open")
         close1 = prices.get(symbols[0], {}).get("close")
         ret1 = returns.get(symbols[0])
@@ -235,24 +231,24 @@ def summarize_week(week: str, picks: List[dict], prices: Dict[str, Dict[str, flo
         if valid:
             avg_ret = sum(valid) / len(valid)
         lines.append(
-            "| {model} | {s1} | {s2} | {o1:.2f} | {c1:.2f} | {r1:.2%} |".format(
+            "| {model} | {sym} | {o:.2f} | {c:.2f} | {r:.2%} |".format(
                 model=pick["model"],
-                s1=s1_disp,
-                s2=s2_disp,
-                o1=open1 or 0.0,
-                c1=close1 or 0.0,
-                r1=ret1 or 0.0,
+                sym=_format_symbol(symbols[0]),
+                o=open1 or 0.0,
+                c=close1 or 0.0,
+                r=ret1 or 0.0,
             )
         )
         lines.append(
-            "|  |  |  | {o2:.2f} | {c2:.2f} | {r2:.2%} |".format(
-                o2=open2 or 0.0,
-                c2=close2 or 0.0,
-                r2=ret2 or 0.0,
+            "|  | {sym} | {o:.2f} | {c:.2f} | {r:.2%} |".format(
+                sym=_format_symbol(symbols[1]),
+                o=open2 or 0.0,
+                c=close2 or 0.0,
+                r=ret2 or 0.0,
             )
         )
         avg_str = f"{avg_ret:.2%}" if avg_ret is not None else "N/A"
-        lines.append(f"|  |  |  |  |  | Avg: {avg_str} |")
+        lines.append(f"|  | Avg |  |  | {avg_str} |")
     lines.append("")
     return "\n".join(lines)
 
