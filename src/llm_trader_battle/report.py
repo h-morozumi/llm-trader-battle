@@ -253,6 +253,84 @@ def summarize_week(week: str, picks: List[dict], prices: Dict[str, Dict[str, flo
     return "\n".join(lines)
 
 
+def summarize_week_final(week_start: date, week_end: date, picks: List[dict], prices: Dict[str, Dict[str, float | None]]) -> str:
+    """Weekly final report (ranking + per-symbol table)."""
+    returns = compute_returns(prices)
+    lines: List[str] = []
+    lines.append(f"# Week {week_start.isoformat()}→{week_end.isoformat()} Final Result")
+    lines.append("")
+
+    llms = sorted({str(p.get("model")) for p in picks if p.get("model")})
+    if llms:
+        _append_models_section(lines, llms)
+
+    lines.append("| LLM | Symbol | Open | Close | Return |")
+    lines.append("| --- | --- | --- | --- | --- |")
+
+    scores: list[tuple[str, float | None, float | None]] = []
+    for pick in picks:
+        model = str(pick.get("model", ""))
+        symbols = pick.get("symbols", [])
+        if not isinstance(symbols, list) or len(symbols) < 2:
+            continue
+        s1, s2 = symbols[0], symbols[1]
+
+        open1 = prices.get(s1, {}).get("open")
+        close1 = prices.get(s1, {}).get("close")
+        ret1 = returns.get(s1)
+        open2 = prices.get(s2, {}).get("open")
+        close2 = prices.get(s2, {}).get("close")
+        ret2 = returns.get(s2)
+
+        lines.append(
+            "| {model} | {sym} | {o:.2f} | {c:.2f} | {r:.2%} |".format(
+                model=model,
+                sym=_format_symbol(s1),
+                o=open1 or 0.0,
+                c=close1 or 0.0,
+                r=ret1 or 0.0,
+            )
+        )
+        lines.append(
+            "|  | {sym} | {o:.2f} | {c:.2f} | {r:.2%} |".format(
+                sym=_format_symbol(s2),
+                o=open2 or 0.0,
+                c=close2 or 0.0,
+                r=ret2 or 0.0,
+            )
+        )
+
+        valid = [r for r in (ret1, ret2) if r is not None]
+        avg = sum(valid) / len(valid) if valid else None
+        total = sum(valid) if valid else None
+        avg_str = f"{avg:.2%}" if avg is not None else "N/A"
+        total_str = f"{total:.2%}" if total is not None else "N/A"
+        lines.append(f"|  | Score |  |  | Total: {total_str}, Avg: {avg_str} |")
+        scores.append((model, total, avg))
+
+    ranked = sorted(scores, key=lambda t: (t[1] is None, -(t[1] or 0.0)))
+    lines.append("")
+    lines.append("## Ranking")
+    lines.append("")
+    lines.append("| Rank | LLM | Total (2 picks) | Avg |")
+    lines.append("| --- | --- | --- | --- |")
+    for idx, (model, total, avg) in enumerate(ranked, start=1):
+        total_str = f"{total:.2%}" if total is not None else "N/A"
+        avg_str = f"{avg:.2%}" if avg is not None else "N/A"
+        lines.append(f"| {idx} | {model} | {total_str} | {avg_str} |")
+
+    lines.append("")
+    return "\n".join(lines)
+
+
+def save_week_final_report(week_start: date, content: str) -> Path:
+    month_dir = REPORTS_DIR / week_start.strftime("%Y%m")
+    month_dir.mkdir(parents=True, exist_ok=True)
+    path = month_dir / f"week-{week_start.isoformat()}.md"
+    path.write_text(content, encoding="utf-8")
+    return path
+
+
 def save_week_report(week_dir: Path, content: str) -> Path:
     path = week_dir / "result.md"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -303,6 +381,7 @@ def update_month_summary(
     daily_llm: Dict[str, Dict[str, float | None]],
     chart_path: Path | None = None,
     holdings: list[dict[str, object]] | None = None,
+    week_finals: set[str] | None = None,
 ) -> Path:
     lines: List[str] = []
     lines.append(f"# Summary {month}")
@@ -316,7 +395,8 @@ def update_month_summary(
     lines.append(header)
     lines.append(sep)
     for day in sorted(daily_llm.keys()):
-        row = [day]
+        day_label = f"{day} *" if (week_finals and day in week_finals) else day
+        row = [day_label]
         scores = daily_llm.get(day, {})
         for llm in llms:
             value = scores.get(llm)

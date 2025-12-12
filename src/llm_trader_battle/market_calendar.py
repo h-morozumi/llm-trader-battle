@@ -51,6 +51,18 @@ def trading_days_in_week(week_start: date) -> list[date]:
     return days
 
 
+def week_final_trading_day(week_start: date) -> date | None:
+    """Return the last trading day within the Mon→Sun window starting at week_start."""
+    days = trading_days_in_week(week_start)
+    return max(days) if days else None
+
+
+def is_week_final_trading_day(d: date) -> bool:
+    ws = week_start_for(d)
+    last = week_final_trading_day(ws)
+    return last == d
+
+
 @lru_cache
 def manual_closed_dates() -> set[date]:
     data = load_json_optional(MANUAL_CLOSED_DATES_PATH)

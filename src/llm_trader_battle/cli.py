@@ -5,7 +5,7 @@ from datetime import date, timedelta
 from typing import Dict, List, Sequence
 
 from .config import DEFAULT_LLMS, JST
-from .market_calendar import next_monday, week_start_for, is_trading_day
+from .market_calendar import next_monday, week_start_for, is_trading_day, is_week_final_trading_day, week_final_trading_day
 from .picks import generate_llm_picks, load_current_picks, save_week_and_current, week_dir_from_id
 from .prices import fetch_open_close, load_daily_prices, save_daily_prices
 from .report import (
@@ -16,7 +16,9 @@ from .report import (
     llm_model_map,
     save_daily_result,
     summarize_daily,
+    summarize_week_final,
     update_month_summary,
+    save_week_final_report,
 )
 from .storage import PICKS_DIR, PRICES_DIR, RESULTS_DIR, REPORTS_DIR, load_json_optional
 
@@ -95,6 +97,19 @@ def handle_aggregate_daily(args: argparse.Namespace) -> None:
     }
     save_daily_result(target, content, payload)
 
+    # week-final report (generated only on the week's last trading day)
+    if is_week_final_trading_day(target):
+        week_end = target
+        week_prices: Dict[str, Dict[str, float | None]] = {}
+        for s in symbols:
+            week_prices[s] = {
+                "open": returns_per_symbol[s]["buy_open"],
+                "close": returns_per_symbol[s]["close"],
+            }
+        week_pick_dicts = [{"model": p.model, "symbols": p.symbols} for p in picks]
+        week_md = summarize_week_final(week_start, week_end, week_pick_dicts, week_prices)
+        save_week_final_report(week_start, week_md)
+
     # monthly summary update
     month = target.strftime("%Y%m")
     month_prefix = target.strftime("%Y-%m")
@@ -124,7 +139,8 @@ def handle_aggregate_daily(args: argparse.Namespace) -> None:
         picks_data = load_json_optional(picks_file) or {}
         picks_map = picks_data.get("picks", {}) if isinstance(picks_data, dict) else {}
         week_start = week_id
-        week_end = (date.fromisoformat(week_id) + timedelta(days=4)).isoformat()
+        last = week_final_trading_day(date.fromisoformat(week_id))
+        week_end = (last or (date.fromisoformat(week_id) + timedelta(days=4))).isoformat()
         for model, entries in picks_map.items():
             if not isinstance(entries, list):
                 continue
@@ -150,6 +166,17 @@ def handle_aggregate_daily(args: argparse.Namespace) -> None:
 
     chart_path = REPORTS_DIR / month / "summary.png"
     days_sorted = sorted(filtered_daily_llm.keys())
+
+    # mark week-final trading days in the monthly table
+    week_finals: set[str] = set()
+    for d in filtered_daily_llm.keys():
+        try:
+            dd = date.fromisoformat(d)
+        except ValueError:
+            continue
+        if is_week_final_trading_day(dd):
+            week_finals.add(d)
+
     plot_llm_line(days_sorted, llm_list, filtered_daily_llm, f"LLM Returns {month}", chart_path, even_spacing=True)
     update_month_summary(
         month,
@@ -157,6 +184,7 @@ def handle_aggregate_daily(args: argparse.Namespace) -> None:
         filtered_daily_llm,
         chart_path=chart_path if chart_path.exists() else None,
         holdings=holdings if holdings else None,
+        week_finals=week_finals if week_finals else None,
     )
     print(f"results saved to {RESULTS_DIR / target.isoformat()} and reports/{month}/summary.md")
 
