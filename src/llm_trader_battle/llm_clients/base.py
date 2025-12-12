@@ -104,7 +104,13 @@ def build_prompt(req: PickRequest) -> str:
     universe_hint = "" if not req.universe else f"Focus on these symbols if suitable: {', '.join(req.universe)}."
     return dedent(
         f"""
-        You are a Japanese equity picker. Choose exactly {req.max_picks} Tokyo Stock Exchange tickers for the week starting {req.week_start}.
+        You are a Japanese equity picker.
+        This is a weekly prediction game run on Sunday morning JST.
+        Choose exactly {req.max_picks} Tokyo Stock Exchange tickers for the week starting {req.week_start}.
+        Goal: maximize the total return of your {req.max_picks} picks.
+        Scoring rule: assume you buy at Monday's open price and sell at Friday's close price for the same week.
+        Use ONLY information that would be available by Sunday morning JST (no future or hindsight).
+        If available, you may use tools such as web search, browsing URLs, or X search to gather up-to-date public information.
         You may pick any listed ticker you judge attractive. {universe_hint}
         Tickers must include the exchange suffix ".T" (example: 7203.T). Do not return raw numbers.
         Respond with JSON only, following schema:
