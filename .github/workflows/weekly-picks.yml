@@ -28,6 +28,25 @@ jobs:
       - name: Generate placeholder picks for next week
         env:
           WEEK_START: ${{ github.event.inputs.week_start || '' }}
+          # LLM provider secrets (required when running `predict`)
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_MODEL: ${{ secrets.CLAUDE_MODEL }}
+
+          AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_API_VERSION: ${{ secrets.AZURE_OPENAI_API_VERSION }}
+          AZURE_OPENAI_DEPLOYMENT_GPT: ${{ secrets.AZURE_OPENAI_DEPLOYMENT_GPT }}
+
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ secrets.GEMINI_MODEL }}
+
+          GROK_ENDPOINT: ${{ secrets.GROK_ENDPOINT }}
+          GROK_API_KEY: ${{ secrets.GROK_API_KEY }}
+          GROK_MODEL: ${{ secrets.GROK_MODEL }}
+
+          # Optional aliases supported by the Grok client
+          XAI_ENDPOINT: ${{ secrets.XAI_ENDPOINT }}
+          XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
         run: |
           if [ -n "$WEEK_START" ]; then
             uv run llm-trader-battle predict --week-start "$WEEK_START"
