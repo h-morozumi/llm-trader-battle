@@ -13,6 +13,7 @@ from .report import (
     find_week_buy_prices,
     plot_llm_bar,
     plot_llm_line,
+    llm_model_map,
     save_daily_result,
     summarize_daily,
     update_month_summary,
@@ -88,6 +89,7 @@ def handle_aggregate_daily(args: argparse.Namespace) -> None:
 
     payload = {
         "date": target.isoformat(),
+        "llm_models": {k: v.get("model") for k, v in llm_model_map(sorted(llm_avg.keys())).items()},
         "llm_avg": llm_avg,
         "per_symbol": returns_per_symbol,
     }

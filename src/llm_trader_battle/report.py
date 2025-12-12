@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 from functools import lru_cache
+import os
 from pathlib import Path
 from typing import Dict, List, Mapping
 
@@ -12,6 +13,35 @@ import yfinance as yf
 from .prices import load_daily_prices
 from .storage import REPORTS_DIR, RESULTS_DIR, dump_json, flat_result_json_path
 from .market_calendar import trading_days_in_week
+
+
+def llm_model_map(llms: List[str] | None = None) -> Dict[str, Dict[str, str | None]]:
+    """Return configured model identifiers from environment variables.
+
+    Note: For Azure OpenAI, this is the deployment name (model="<deployment>").
+    """
+
+    mapping: Dict[str, Dict[str, str | None]] = {
+        "gpt": {"env": "AZURE_OPENAI_DEPLOYMENT_GPT", "model": os.environ.get("AZURE_OPENAI_DEPLOYMENT_GPT")},
+        "gemini": {"env": "GEMINI_MODEL", "model": os.environ.get("GEMINI_MODEL")},
+        "claude": {"env": "CLAUDE_MODEL", "model": os.environ.get("CLAUDE_MODEL")},
+        "grok": {"env": "GROK_MODEL", "model": os.environ.get("GROK_MODEL")},
+    }
+    if llms is None:
+        return mapping
+    return {k: mapping.get(k, {"env": None, "model": None}) for k in llms}
+
+
+def _append_models_section(lines: List[str], llms: List[str]) -> None:
+    models = llm_model_map(llms)
+    lines.append("## Models")
+    lines.append("")
+    lines.append("| LLM | Model |")
+    lines.append("| --- | --- |")
+    for llm in llms:
+        model = models.get(llm, {}).get("model")
+        lines.append(f"| {llm} | {model or 'N/A'} |")
+    lines.append("")
 
 
 @lru_cache(maxsize=2048)
@@ -134,6 +164,11 @@ def summarize_daily(target_date: date, picks: List[dict], prices_today: Dict[str
     lines: List[str] = []
     lines.append(f"# Daily Result {target_date.isoformat()}")
     lines.append("")
+
+    llms = sorted({str(p.get("model")) for p in picks if p.get("model")})
+    if llms:
+        _append_models_section(lines, llms)
+
     lines.append("| LLM | Symbol 1 | Symbol 2 | Buy(Open) | Close(today) | Return |")
     lines.append("| --- | --- | --- | --- | --- | --- |")
     for pick in picks:
@@ -178,6 +213,11 @@ def summarize_week(week: str, picks: List[dict], prices: Dict[str, Dict[str, flo
     lines: List[str] = []
     lines.append(f"# Week {week} Result")
     lines.append("")
+
+    llms = sorted({str(p.get("model")) for p in picks if p.get("model")})
+    if llms:
+        _append_models_section(lines, llms)
+
     lines.append("| LLM | Symbol 1 | Symbol 2 | Open | Close | Return |")
     lines.append("| --- | --- | --- | --- | --- | --- |")
     for pick in picks:
@@ -228,6 +268,10 @@ def update_summary(all_weeks: List[str], llms: List[str], llm_summaries: Dict[st
     lines: List[str] = []
     lines.append("# Summary")
     lines.append("")
+
+    if llms:
+        _append_models_section(lines, llms)
+
     header = "| Week | " + " | ".join(llms) + " |"
     sep = "| --- | " + " | ".join(["---"] * len(llms)) + " |"
     lines.append(header)
@@ -267,6 +311,10 @@ def update_month_summary(
     lines: List[str] = []
     lines.append(f"# Summary {month}")
     lines.append("")
+
+    if llms:
+        _append_models_section(lines, llms)
+
     header = "| Date | " + " | ".join(llms) + " |"
     sep = "| --- | " + " | ".join(["---"] * len(llms)) + " |"
     lines.append(header)

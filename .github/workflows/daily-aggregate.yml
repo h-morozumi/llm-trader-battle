@@ -28,6 +28,11 @@ jobs:
       - name: Aggregate daily returns
         env:
           DATE: ${{ github.event.inputs.date || '' }}
+          # Model identifiers (used in reports)
+          CLAUDE_MODEL: ${{ secrets.CLAUDE_MODEL }}
+          GEMINI_MODEL: ${{ secrets.GEMINI_MODEL }}
+          GROK_MODEL: ${{ secrets.GROK_MODEL }}
+          AZURE_OPENAI_DEPLOYMENT_GPT: ${{ secrets.AZURE_OPENAI_DEPLOYMENT_GPT }}
         run: |
           if [ -n "$DATE" ]; then
             uv run llm-trader-battle aggregate-daily --date "$DATE"
