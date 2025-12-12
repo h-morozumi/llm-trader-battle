@@ -40,6 +40,63 @@ LLM（GPT / Gemini / Claude / Grok など）が週初に日本株を2銘柄ず�
 	- `uv run llm-trader-battle predict --week-start 2025-12-15 --llms gpt`
 	- 同様に `--llms gemini` / `--llms claude` / `--llms grok` で単体実行できます。
 
+## Debug（LLM出力・ツール使用の可視化）
+
+LLMが「検索/URL取得」などの外部ツールを**使える設定か**と、実行時に**実際に使ったか**は別です。
+このプロジェクトでは、実行ログ（stderr）にツール使用痕跡を出すためのデバッグ用環境変数を用意しています。
+
+### ログ出力の環境変数
+
+- `LLM_TRADER_BATTLE_LOG_LLM_OUTPUT=1`
+	- LLMの生出力（raw）を stderr に出します。
+- `LLM_TRADER_BATTLE_LOG_LLM_TOOL=1`
+	- `tool_used` を stderr に1行で出します。
+- `LLM_TRADER_BATTLE_LOG_LLM_TOOL_TRACE=1`
+	- `tool_trace`（プロバイダごとの詳細痕跡）を JSON で stderr に出します。
+
+例:
+
+```bash
+LLM_TRADER_BATTLE_LOG_LLM_TOOL=1 \
+LLM_TRADER_BATTLE_LOG_LLM_TOOL_TRACE=1 \
+uv run llm-trader-battle predict
+```
+
+### `tool_used` の意味
+
+`tool_used` は「このLLM呼び出しで、外部ツール（検索等）を**実行した痕跡が取れたか**」を表します。
+
+- `tool_used=True`: 何らかのツール実行痕跡がレスポンスに含まれていた
+- `tool_used=False`: ツール実行痕跡が見当たらなかった
+- `tool_used=None`: そのプロバイダのレスポンスからは判定できなかった（フィールドが無い等）
+
+注意:
+
+- `tool_used=False` は「ツールが無効」という意味ではなく、「**痕跡が取れなかった**」という意味です。
+- プロバイダによっては、ツールの実行がサーバ側で完結し、クライアントには詳細な tool calls が返らないことがあります。
+
+## 各LLMが使えるように設定されている外部ツール（現状）
+
+実装は `src/llm_trader_battle/llm_clients/` 配下にあります。
+
+- GPT（Azure OpenAI Responses API）
+	- 有効化: `web_search` ツールをリクエストに含めます。
+	- 痕跡: `response.output` 内の `web_search_call` などを拾って `tool_trace` に記録します。
+
+- Claude（claude_agent_sdk）
+	- 有効化: preset（`claude_code`）を使いつつ、`allowed_tools=["WebSearch", "WebFetch"]` で WebSearch/WebFetch を許可します。
+	- 痕跡: `ToolUseBlock`（WebSearch/WebFetch）を `tool_trace.tool_uses` に記録します。
+
+- Gemini（Google Generative AI SDK）
+	- 有効化: `tools` に `google_search` と `url_context` を設定します。
+	- 痕跡: `grounding_metadata` / `citation_metadata` / `url_context_metadata` の有無を `tool_trace` に記録します。
+		- これらが出ていない場合でも、将来SDK/モデル挙動が変わる可能性はあります。
+
+- Grok（xAI SDK）
+	- 有効化: `search_parameters` で Live Search を有効化し、`sources=["web","x"]`、`mode="auto"` を指定します。
+	- 痕跡: `usage.num_sources_used`（検索で使われたソース数）や citations の件数を `tool_trace` に記録します。
+		- `tool_calls` が空でも `num_sources_used>0` なら「検索が動いた」と判定できます。
+
 ### 週の決め方
 - 週IDは **月曜日の日付（JST）** を `YYYY-MM-DD` で用います（週末のピック時に翌週の月曜を自動算出）。
 

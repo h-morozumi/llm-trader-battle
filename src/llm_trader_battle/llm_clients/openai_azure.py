@@ -23,6 +23,44 @@ def _build_client() -> OpenAI:
     )
 
 
+def _safe_model_dump(obj):
+    fn = getattr(obj, "model_dump", None)
+    if callable(fn):
+        try:
+            return fn()
+        except Exception:  # noqa: BLE001
+            return None
+    return None
+
+
+def _extract_web_search_trace(resp) -> tuple[bool | None, dict | None]:
+    dump = _safe_model_dump(resp)
+    if not isinstance(dump, dict):
+        return None, None
+
+    output = dump.get("output")
+    output_types: list[str] = []
+    web_items: list[dict] = []
+    if isinstance(output, list):
+        for item in output:
+            if not isinstance(item, dict):
+                continue
+            t = item.get("type")
+            if isinstance(t, str):
+                output_types.append(t)
+            if isinstance(t, str) and t.startswith("web_search"):
+                web_items.append({"type": t, **{k: item.get(k) for k in ("id", "status") if k in item}})
+
+    used = bool(web_items)
+    trace: dict[str, object] = {
+        "tools_configured": [{"type": "web_search", "search_context_size": "low"}],
+        "output_item_types": output_types,
+        "web_search_items": web_items,
+        "web_search_item_count": len(web_items),
+    }
+    return used, trace
+
+
 class AzureOpenAIClient(LlmClient):
     def __init__(self) -> None:
         self._client = _build_client()
@@ -60,4 +98,8 @@ class AzureOpenAIClient(LlmClient):
                     except Exception:  # noqa: BLE001
                         raw = str(resp)
                     raise ValueError(f"No text output from Azure Responses: {raw}")
-        return parse_picks_json(text)
+        parsed = parse_picks_json(text)
+        used, trace = _extract_web_search_trace(resp)
+        parsed.tool_used = used
+        parsed.tool_trace = trace
+        return parsed

@@ -42,4 +42,29 @@ class GrokOpenAIClient(LlmClient):
             search_parameters=search_params,
         )
         resp = chat.sample()
-        return parse_picks_json(resp.content)
+        parsed = parse_picks_json(resp.content)
+        citations = getattr(resp, "citations", None)
+        tool_calls = getattr(resp, "tool_calls", None)
+        usage = getattr(resp, "usage", None)
+        num_sources_used = getattr(usage, "num_sources_used", None) if usage is not None else None
+
+        used: bool | None
+        if isinstance(num_sources_used, int):
+            used = num_sources_used > 0
+        elif isinstance(citations, list):
+            used = len(citations) > 0
+        elif tool_calls is not None:
+            try:
+                used = bool(tool_calls)
+            except Exception:  # noqa: BLE001
+                used = None
+        else:
+            used = None
+        parsed.tool_used = used
+        parsed.tool_trace = {
+            "search_parameters": {"sources": ["web", "x"], "mode": "auto"},
+            "citations_count": len(citations) if isinstance(citations, list) else None,
+            "num_sources_used": num_sources_used,
+            "tool_calls_count": len(tool_calls) if hasattr(tool_calls, "__len__") else None,
+        }
+        return parsed

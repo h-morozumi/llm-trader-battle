@@ -4,7 +4,7 @@ import asyncio
 import json
 import os
 
-from claude_agent_sdk import AssistantMessage, ClaudeAgentOptions, ResultMessage, TextBlock, query
+from claude_agent_sdk import AssistantMessage, ClaudeAgentOptions, ResultMessage, TextBlock, ToolResultBlock, ToolUseBlock, query
 
 from .base import LlmClient, PickRequest, PickResponse, build_prompt, parse_picks_json
 
@@ -35,7 +35,7 @@ def _response_schema() -> dict:
     }
 
 
-async def _run_claude(prompt: str, model: str) -> str:
+async def _run_claude(prompt: str, model: str) -> tuple[str, dict]:
     opts = ClaudeAgentOptions(
         model=model,
         # Enable Claude Code tool preset, then explicitly allow only the tools we want.
@@ -53,12 +53,30 @@ async def _run_claude(prompt: str, model: str) -> str:
     last_text: str | None = None
     last_result: str | None = None
     last_structured: object | None = None
+    tool_uses: list[dict] = []
+    tool_results: list[dict] = []
     async for message in query(prompt=prompt, options=opts):
         if isinstance(message, AssistantMessage):
             parts: list[str] = []
             for block in message.content:
                 if isinstance(block, TextBlock) and block.text:
                     parts.append(block.text)
+                elif isinstance(block, ToolUseBlock):
+                    tool_uses.append(
+                        {
+                            "name": getattr(block, "name", None),
+                            "id": getattr(block, "id", None),
+                            "input": getattr(block, "input", None),
+                        }
+                    )
+                elif isinstance(block, ToolResultBlock):
+                    tool_results.append(
+                        {
+                            "tool_use_id": getattr(block, "tool_use_id", None),
+                            "is_error": getattr(block, "is_error", None),
+                            "content": getattr(block, "content", None),
+                        }
+                    )
             if parts:
                 last_text = "".join(parts)
         elif isinstance(message, ResultMessage):
@@ -69,12 +87,20 @@ async def _run_claude(prompt: str, model: str) -> str:
             if isinstance(message.result, str) and message.result.strip():
                 last_result = message.result
 
+    tool_trace = {
+        "allowed_tools": ["WebSearch", "WebFetch"],
+        "tool_uses": tool_uses,
+        "tool_results": tool_results,
+        "tool_use_count": len(tool_uses),
+        "tool_names": sorted({t.get("name") for t in tool_uses if t.get("name")}),
+    }
+
     if isinstance(last_structured, dict) and last_structured:
-        return json.dumps(last_structured, ensure_ascii=False)
+        return json.dumps(last_structured, ensure_ascii=False), tool_trace
     if last_text and last_text.strip():
-        return last_text
+        return last_text, tool_trace
     if last_result and last_result.strip():
-        return last_result
+        return last_result, tool_trace
     raise RuntimeError("Claude agent returned no text content")
 
 
@@ -87,5 +113,8 @@ class ClaudeClient(LlmClient):
 
     def generate(self, req: PickRequest) -> PickResponse:
         prompt = build_prompt(req)
-        text = asyncio.run(_run_claude(prompt, self._model))
-        return parse_picks_json(text)
+        text, tool_trace = asyncio.run(_run_claude(prompt, self._model))
+        parsed = parse_picks_json(text)
+        parsed.tool_trace = tool_trace
+        parsed.tool_used = bool(tool_trace.get("tool_uses"))
+        return parsed

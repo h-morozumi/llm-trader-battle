@@ -28,6 +28,9 @@ class PickResponse:
     symbols: list[str]
     reasons: list[str]
     methods: list[str]
+    raw: str | None = None
+    tool_used: bool | None = None
+    tool_trace: dict | None = None
 
 
 class LlmClient(Protocol):
@@ -36,11 +39,11 @@ class LlmClient(Protocol):
 
 def parse_picks_json(text: str) -> PickResponse:
     """Parse JSON of shape {"picks":[{"symbol":"7203.T","reason":"...","method":"..."}, ...]}"""
-    def _extract_json_payload(raw: str) -> str:
+    raw_text = text
+    def _strip_code_fences(raw: str) -> str:
         s = (raw or "").strip()
         if not s:
             return s
-        # Strip markdown code fences if present.
         if s.startswith("```"):
             lines = s.splitlines()
             if lines and lines[0].lstrip().startswith("```"):
@@ -48,22 +51,33 @@ def parse_picks_json(text: str) -> PickResponse:
             if lines and lines[-1].strip().startswith("```"):
                 lines = lines[:-1]
             s = "\n".join(lines).strip()
-
-        # If extra prose exists, try to carve out the first JSON object.
-        if not s.startswith("{"):
-            start = s.find("{")
-            end = s.rfind("}")
-            if 0 <= start < end:
-                s = s[start : end + 1].strip()
         return s
 
+    def _parse_first_json_object(raw: str):
+        s = _strip_code_fences(raw)
+        if not s:
+            raise json.JSONDecodeError("Empty input", s, 0)
+
+        # Find the first JSON object in the text and parse only that object,
+        # tolerating trailing content (which would otherwise raise Extra data).
+        start = s.find("{")
+        if start < 0:
+            return json.loads(s)
+        decoder = json.JSONDecoder()
+        obj, end = decoder.raw_decode(s[start:])
+        return obj
+
     try:
-        data = json.loads(text)
+        data = _parse_first_json_object(text)
     except json.JSONDecodeError:
-        extracted = _extract_json_payload(text)
-        if not extracted:
+        # Last-resort fallback: carve between the first '{' and last '}' then parse.
+        s = _strip_code_fences(text)
+        start = s.find("{")
+        end = s.rfind("}")
+        if 0 <= start < end:
+            data = json.loads(s[start : end + 1].strip())
+        else:
             raise
-        data = json.loads(extracted)
     picks = data.get("picks") if isinstance(data, dict) else None
     if not isinstance(picks, Iterable):
         raise ValueError("invalid picks payload")
@@ -82,7 +96,7 @@ def parse_picks_json(text: str) -> PickResponse:
             break
     if not symbols:
         raise ValueError("no symbols parsed")
-    return PickResponse(symbols=symbols, reasons=reasons, methods=methods)
+    return PickResponse(symbols=symbols, reasons=reasons, methods=methods, raw=raw_text)
 
 
 def build_prompt(req: PickRequest) -> str:

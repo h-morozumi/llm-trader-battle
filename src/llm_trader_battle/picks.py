@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import sys
 from dataclasses import asdict, dataclass
 from datetime import date, datetime
 from pathlib import Path
@@ -46,9 +48,22 @@ def generate_llm_picks(week_dir: Path, week_start: date, models: Sequence[str] |
     universe = list(universe) if universe else None
     picks: list[LlmPick] = []
     now = datetime.now(tz=JST)
+    log_raw = os.environ.get("LLM_TRADER_BATTLE_LOG_LLM_OUTPUT", "").strip().lower() in {"1", "true", "yes", "on"}
+    log_tool = os.environ.get("LLM_TRADER_BATTLE_LOG_LLM_TOOL", "").strip().lower() in {"1", "true", "yes", "on"}
+    log_tool_trace = os.environ.get("LLM_TRADER_BATTLE_LOG_LLM_TOOL_TRACE", "").strip().lower() in {"1", "true", "yes", "on"}
     for model in models:
         client = _client_for(model)
         resp = client.generate(PickRequest(llm_name=model, week_start=week_start, max_picks=2, universe=universe or []))
+        if log_raw and getattr(resp, "raw", None):
+            print(f"\n[llm-raw-output] llm={model}\n{resp.raw}\n[/llm-raw-output]\n", file=sys.stderr)
+        if log_tool:
+            used = getattr(resp, "tool_used", None)
+            trace = getattr(resp, "tool_trace", None)
+            print(f"[llm-tool-usage] llm={model} tool_used={used}", file=sys.stderr)
+            if log_tool_trace and trace is not None:
+                import json
+
+                print(json.dumps({"llm": model, "tool_trace": trace}, ensure_ascii=False, indent=2), file=sys.stderr)
         symbols = resp.symbols[:2]
         reasons = resp.reasons[:2] if resp.reasons else [""] * len(symbols)
         methods = resp.methods[:2] if hasattr(resp, "methods") and resp.methods else [""] * len(symbols)
