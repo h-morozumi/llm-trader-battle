@@ -1,12 +1,12 @@
 # llm-trader-battle
 
-LLM（GPT / Gemini / Claude / Grok など）が週初に日本株を2銘柄ずつピックし、その週のリターンを比較するゲーム用ツールです。実際の売買は行いません。
+LLM（GPT / Gemini / Claude / Grok など）が週初に日本株を2銘柄ずつピックし、その週のリターンを比較するゲーム用ツールです。実際の売買は行いません。ピック対象の銘柄は LLM が自分で考えて選びます。
 
 ## 仕様ハイライト
 - **データ取得**: `yfinance` を使用。日本株ティッカーは `7203.T` のようにコード+取引所を使用します。
 - **マーケットカレンダー**: 平日かつ `jpholiday` 非対象日のみ取引日とみなし、さらに `data/calendar/manual_closed_dates.json` に列挙した半休日・臨時休場日もスキップします。月曜が祝日の場合は次の取引日に始値を取り、金曜が休場なら次の取引日に終値を取ります。
 - **タイムゾーン**: 内部では `Asia/Tokyo` を基準に計算し、記録時刻は UTC へ変換します（JSON に ISO 8601 で保存）。
-- **LLMピック**: 現状はダミー（決め打ち）で生成。実際の LLM 呼び出しロジックを差し替えて運用してください。
+- **LLMピック**: 各 LLM クライアントを実際に呼び出してピックを生成します。銘柄ユニバースは固定せず、LLM が自ら選びます。
 - **データ保存**: GitHub リポジトリ内にファイルとして保存（DB 不使用）。週次ピック/日次価格/日次結果はいずれもフラットな日付付きファイル名（JSON・Markdown）で管理。
 - **GitHub Actions**: uv を使って3本の定期バッチを実行し、自動コミット/Pushします。
 
@@ -25,6 +25,20 @@ LLM（GPT / Gemini / Claude / Grok など）が週初に日本株を2銘柄ず�
 - 週次ピック（週末実行）: `uv run llm-trader-battle predict --week-start 2025-01-06`（省略時は次の月曜を自動推定）
 - 日次価格取得（16:00以降・取引日だけ実行）: `uv run llm-trader-battle fetch-daily --date 2025-01-06`
 - 日次集計（17:00以降・取引日だけ実行）: `uv run llm-trader-battle aggregate-daily --date 2025-01-06`
+
+### `uv sync` が失敗する場合（開発環境向け）
+一部の環境（例: Codespaces / Dev Container のワークスペースマウント）では、`.venv` をリポジトリ直下に作ると
+ファイルシステムの都合で `uv sync` が `No such file or directory (os error 2)` で失敗することがあります。
+
+その場合は、仮想環境の作成先をホームディレクトリ側に逃がすと解消します:
+
+- `export UV_PROJECT_ENVIRONMENT="$HOME/.venv-llm-trader-battle"`
+- `uv sync`
+
+### LLMを1つだけ動かす方法
+- `predict` 実行時に `--llms` で1件だけ指定します（例: GPT だけ動かす）:
+	- `uv run llm-trader-battle predict --week-start 2025-12-15 --llms gpt`
+	- 同様に `--llms gemini` / `--llms claude` / `--llms grok` で単体実行できます。
 
 ### 週の決め方
 - 週IDは **月曜日の日付（JST）** を `YYYY-MM-DD` で用います（週末のピック時に翌週の月曜を自動算出）。
@@ -46,6 +60,15 @@ LLM（GPT / Gemini / Claude / Grok など）が週初に日本株を2銘柄ず�
 - 月次サマリ (`reports/<YYYYMM>/summary.md`): 日ごと×LLMごとの平均リターン表、折れ線グラフ（`summary.png`）、週ごとのホールディング一覧（週初→週末の銘柄）が含まれます。
 
 ## 今後差し替えるポイント
-- **LLM 呼び出しロジック**: `src/llm_trader_battle/picks.py` の `generate_stub_picks` を実際の LLM API 呼び出しに置き換え、環境変数や Secrets を参照してください。
+- **LLM 呼び出しロジック**: `src/llm_trader_battle/llm_clients/` 配下の各クライアントを運用環境に合わせて調整してください（プロンプトやフォーマット変更など）。
 - **レポート形式**: 必要に応じてチャートやより詳細な指標（勝率、ドローダウン等）を追加してください。
+
+- GPT (Azure OpenAI Responses API): `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_API_VERSION`, `AZURE_OPENAI_DEPLOYMENT_GPT` (例: `gpt-5.1-thinking`)
+- Grok (公式SDK/Responses互換): `GROK_ENDPOINT`, `GROK_API_KEY`, `GROK_MODEL` (例: `grok-4`) — 別名として `XAI_ENDPOINT`, `XAI_API_KEY` も使用可。
+- Gemini (Google Generative AI SDK): `GEMINI_API_KEY`, optional `GEMINI_MODEL` (例: `gemini-2.5-pro`)
+- Claude (Anthropic SDK): `ANTHROPIC_API_KEY`, optional `CLAUDE_MODEL` (例: `claude-4.5-sonnet`)
+いずれか欠けた場合はエラーになります。
+
+### 環境変数の読み込み
+開発時はリポジトリ直下の `.env` に上記キーを記載すれば、自動で読み込まれます（`python-dotenv` を利用）。
 

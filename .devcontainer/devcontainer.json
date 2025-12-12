@@ -1,5 +1,8 @@
 {
   "name": "llm-trader-battle",
   "image": "mcr.microsoft.com/devcontainers/universal:linux",
+  "containerEnv": {
+    "UV_PROJECT_ENVIRONMENT": "/home/codespace/.venv-llm-trader-battle"
+  },
   "postCreateCommand": "curl -LsSf https://astral.sh/uv/install.sh | sh"
 }

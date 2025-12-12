@@ -2,3 +2,9 @@
 __pycache__/
 *.pyc
 .DS_Store
+.env
+.env.local
+.vscode/
+.idea/
+.ruff_cache/
+.pytest_cache/

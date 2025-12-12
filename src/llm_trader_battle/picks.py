@@ -1,13 +1,17 @@
 from __future__ import annotations
 
-import random
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import List, Sequence
 
 from .config import DEFAULT_LLMS, JST, UTC
 from .storage import PICKS_DIR, dump_json, load_json_optional, flat_picks_json_path
+from .llm_clients.base import PickRequest
+from .llm_clients.claude import ClaudeClient
+from .llm_clients.gemini import GeminiClient
+from .llm_clients.grok_openai import GrokOpenAIClient
+from .llm_clients.openai_azure import AzureOpenAIClient
 
 
 @dataclass
@@ -15,6 +19,7 @@ class LlmPick:
     model: str
     symbols: List[str]
     reasons: List[str]
+    methods: List[str]
     picked_at_utc: datetime
 
     def to_dict(self) -> dict:
@@ -23,57 +28,41 @@ class LlmPick:
         return data
 
 
-def generate_stub_picks(week_dir: Path, models: Sequence[str] | None = None) -> list[LlmPick]:
-    # Placeholder picks. Replace with real LLM calls.
+def _client_for(model: str):
+    # lazy construct to avoid importing SDKs when not needed
+    if model == "gpt":
+        return AzureOpenAIClient()
+    if model == "grok":
+        return GrokOpenAIClient()
+    if model == "gemini":
+        return GeminiClient()
+    if model == "claude":
+        return ClaudeClient()
+    raise ValueError(f"unsupported model {model}")
+
+
+def generate_llm_picks(week_dir: Path, week_start: date, models: Sequence[str] | None = None, universe: Sequence[str] | None = None) -> list[LlmPick]:
     models = list(models) if models else DEFAULT_LLMS
-    base_candidates = [
-        "7203.T",  # トヨタ
-        "6758.T",  # ソニーＧ
-        "9984.T",  # ソフトバンクＧ
-        "6861.T",  # キーエンス
-        "8035.T",  # 東エレク
-        "8306.T",  # 三菱ＵＦＪ
-        "8316.T",  # 三井住友ＦＧ
-        "9432.T",  # ＮＴＴ
-        "4063.T",  # 信越化
-        "5401.T",  # 日本製鉄
-        "4502.T",  # 武田薬品
-        "6098.T",  # リクルートＨＤ
-        "2802.T",  # 味の素
-        "2914.T",  # ＪＴ
-        "3382.T",  # セブン＆アイ
-        "9020.T",  # ＪＲ東日本
-        "9022.T",  # ＪＲ東海
-        "8058.T",  # 三菱商事
-        "8267.T",  # イオン
-        "5108.T",  # ブリヂストン
-        "8001.T",  # 伊藤忠商事
-        "6902.T",  # デンソー
-        "6981.T",  # 村田製作所
-        "6752.T",  # パナソニックＨＤ
-        "6501.T",  # 日立製作所
-        "7201.T",  # 日産自
-        "4503.T",  # アステラス
-        "4523.T",  # エーザイ
-        "8591.T",  # オリックス
-        "6988.T",  # 日東電工
-    ]
+    universe = list(universe) if universe else None
     picks: list[LlmPick] = []
     now = datetime.now(tz=JST)
-    rng = random.Random()
-    rng.seed(now.timestamp())
-    reason_templates = [
-        "直近決算が堅調でガイダンスが前向き",
-        "EPS 成長とROEが同業比優位",
-        "割安バリュエーション（PER/EVEBITDA）",
-        "需給改善と出来高増加が確認できる",
-        "配当利回りが市場平均を上回る",
-        "構造的なテーマ追い風（半導体/AI）",
-    ]
     for model in models:
-        symbols = rng.sample(base_candidates, k=2)
-        reasons = [rng.choice(reason_templates) for _ in symbols]
-        picks.append(LlmPick(model=model, symbols=symbols, reasons=reasons, picked_at_utc=now.astimezone(UTC)))
+        client = _client_for(model)
+        resp = client.generate(PickRequest(llm_name=model, week_start=week_start, max_picks=2, universe=universe or []))
+        symbols = resp.symbols[:2]
+        reasons = resp.reasons[:2] if resp.reasons else [""] * len(symbols)
+        methods = resp.methods[:2] if hasattr(resp, "methods") and resp.methods else [""] * len(symbols)
+        if len(symbols) < 2:
+            raise ValueError(f"insufficient picks returned for {model}")
+        picks.append(
+            LlmPick(
+                model=model,
+                symbols=symbols,
+                reasons=reasons,
+                methods=methods,
+                picked_at_utc=now.astimezone(UTC),
+            )
+        )
     save_picks(week_dir, picks)
     return picks
 
@@ -120,6 +109,7 @@ def _picks_to_object(week_id: str, picks: Sequence[LlmPick]) -> dict:
                 {
                     "symbol": sym,
                     "reason": pick.reasons[idx] if idx < len(pick.reasons) else "",
+                    "method": pick.methods[idx] if idx < len(pick.methods) else "",
                     "symbol_index": idx,
                 }
             )
@@ -138,6 +128,7 @@ def _object_to_picks(raw) -> list[LlmPick]:
     for model, entries in picks_field.items():
         symbols: list[str] = []
         reasons: list[str] = []
+        methods: list[str] = []
         # ensure order by symbol_index if present
         if isinstance(entries, list):
             sorted_entries = sorted(
@@ -146,5 +137,6 @@ def _object_to_picks(raw) -> list[LlmPick]:
             for e in sorted_entries:
                 symbols.append(e.get("symbol", ""))
                 reasons.append(e.get("reason", ""))
-        picks.append(LlmPick(model=str(model), symbols=symbols, reasons=reasons, picked_at_utc=picked_dt))
+                methods.append(e.get("method", ""))
+        picks.append(LlmPick(model=str(model), symbols=symbols, reasons=reasons, methods=methods, picked_at_utc=picked_dt))
     return sorted(picks, key=lambda p: p.model)

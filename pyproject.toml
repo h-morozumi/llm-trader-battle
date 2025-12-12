@@ -12,6 +12,11 @@ dependencies = [
     "yfinance>=0.2.43",
     "jpholiday>=0.1.9",
     "matplotlib>=3.9",
+    "openai>=1.55.0",
+    "google-genai>=0.1.0",
+    "claude-agent-sdk>=0.1.0",
+    "python-dotenv>=1.0.1",
+    "xai-sdk>=0.4.0",
 ]
 
 [project.scripts]

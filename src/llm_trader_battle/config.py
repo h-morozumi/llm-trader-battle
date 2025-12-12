@@ -4,6 +4,11 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
+from dotenv import load_dotenv
+
+# Load environment variables from a local .env if present to ease development.
+load_dotenv()
+
 
 JST = ZoneInfo("Asia/Tokyo")
 UTC = ZoneInfo("UTC")

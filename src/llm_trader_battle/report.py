@@ -1,15 +1,32 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
+from functools import lru_cache
 from pathlib import Path
 from typing import Dict, List, Mapping
 
 import matplotlib.pyplot as plt
 from matplotlib import ticker as mticker
+import yfinance as yf
 
 from .prices import load_daily_prices
 from .storage import REPORTS_DIR, RESULTS_DIR, dump_json, flat_result_json_path
 from .market_calendar import trading_days_in_week
+
+
+@lru_cache(maxsize=2048)
+def _company_name(symbol: str) -> str | None:
+    try:
+        info = yf.Ticker(symbol).info or {}
+    except Exception:  # noqa: BLE001
+        return None
+    name = info.get("shortName") or info.get("longName") or info.get("name")
+    return str(name).strip() if name else None
+
+
+def _format_symbol(symbol: str) -> str:
+    name = _company_name(symbol)
+    return f"{symbol} ({name})" if name else symbol
 
 
 def compute_returns(prices: Dict[str, Dict[str, float | None]]):
@@ -121,6 +138,8 @@ def summarize_daily(target_date: date, picks: List[dict], prices_today: Dict[str
     lines.append("| --- | --- | --- | --- | --- | --- |")
     for pick in picks:
         symbols = pick["symbols"]
+        s1_disp = _format_symbol(symbols[0])
+        s2_disp = _format_symbol(symbols[1])
         b1 = buy_prices.get(symbols[0])
         c1 = prices_today.get(symbols[0], {}).get("close")
         r1 = returns.get(symbols[0])
@@ -134,8 +153,8 @@ def summarize_daily(target_date: date, picks: List[dict], prices_today: Dict[str
         lines.append(
             "| {model} | {s1} | {s2} | {b1:.2f} | {c1:.2f} | {r1:.2%} |".format(
                 model=pick["model"],
-                s1=symbols[0],
-                s2=symbols[1],
+                s1=s1_disp,
+                s2=s2_disp,
                 b1=b1 or 0.0,
                 c1=c1 or 0.0,
                 r1=r1 or 0.0,
@@ -163,6 +182,8 @@ def summarize_week(week: str, picks: List[dict], prices: Dict[str, Dict[str, flo
     lines.append("| --- | --- | --- | --- | --- | --- |")
     for pick in picks:
         symbols = pick["symbols"]
+        s1_disp = _format_symbol(symbols[0])
+        s2_disp = _format_symbol(symbols[1])
         open1 = prices.get(symbols[0], {}).get("open")
         close1 = prices.get(symbols[0], {}).get("close")
         ret1 = returns.get(symbols[0])
@@ -176,8 +197,8 @@ def summarize_week(week: str, picks: List[dict], prices: Dict[str, Dict[str, flo
         lines.append(
             "| {model} | {s1} | {s2} | {o1:.2f} | {c1:.2f} | {r1:.2%} |".format(
                 model=pick["model"],
-                s1=symbols[0],
-                s2=symbols[1],
+                s1=s1_disp,
+                s2=s2_disp,
                 o1=open1 or 0.0,
                 c1=close1 or 0.0,
                 r1=ret1 or 0.0,
@@ -270,8 +291,10 @@ def update_month_summary(
         for h in sorted(holdings, key=lambda x: (x.get("week_start", ""), x.get("model", ""))):
             week = f"{h.get('week_start', '')}→{h.get('week_end', '')}"
             model = h.get("model", "")
-            symbols = h.get("symbols", "")
-            lines.append(f"| {week} | {model} | {symbols} |")
+            symbols_raw = h.get("symbols", "")
+            symbols = [s.strip() for s in symbols_raw.split(",") if s.strip()]
+            symbols_disp = ", ".join(_format_symbol(s) for s in symbols) if symbols else symbols_raw
+            lines.append(f"| {week} | {model} | {symbols_disp} |")
 
     month_dir = REPORTS_DIR / month
     month_dir.mkdir(parents=True, exist_ok=True)

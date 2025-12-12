@@ -6,7 +6,7 @@ from typing import Dict, List, Sequence
 
 from .config import DEFAULT_LLMS, JST
 from .market_calendar import next_monday, week_start_for, is_trading_day
-from .picks import generate_stub_picks, load_current_picks, save_week_and_current, week_dir_from_id
+from .picks import generate_llm_picks, load_current_picks, save_week_and_current, week_dir_from_id
 from .prices import fetch_open_close, load_daily_prices, save_daily_prices
 from .report import (
     compute_llm_avg,
@@ -31,7 +31,8 @@ def parse_date(value: str | None) -> date:
 def handle_predict(args: argparse.Namespace) -> None:
     target_monday = date.fromisoformat(args.week_start) if args.week_start else next_monday(parse_date(None))
     week_id = target_monday.isoformat()
-    picks = generate_stub_picks(week_dir_from_id(week_id), models=args.llms or DEFAULT_LLMS)
+    llms = args.llms or ([args.llm] if getattr(args, "llm", None) else None) or DEFAULT_LLMS
+    picks = generate_llm_picks(week_dir_from_id(week_id), target_monday, models=llms, universe=None)
     save_week_and_current(week_id, picks)
     print(f"picks saved to {PICKS_DIR / week_id} and current.json")
 
@@ -155,6 +156,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     p_pick = sub.add_parser("predict", help="Generate picks for upcoming week (run on weekend)")
     p_pick.add_argument("--week-start", type=str, help="Week start Monday (YYYY-MM-DD). Default: next Monday from today (JST)")
     p_pick.add_argument("--llms", nargs="+", help="LLM model names")
+    p_pick.add_argument("--llm", help="LLM model name (alias for --llms with single value)")
     p_pick.set_defaults(func=handle_predict)
 
     p_fetch = sub.add_parser("fetch-daily", help="Fetch today's open/close for current picks")
