@@ -116,7 +116,7 @@ def handle_aggregate_daily(args: argparse.Namespace) -> None:
     llm_list = sorted(llm_names)
 
     # holdings (week start→end, per model)
-    holdings: list[dict[str, str]] = []
+    holdings: list[dict[str, object]] = []
     for picks_file in PICKS_DIR.glob("picks-*.json"):
         week_id = picks_file.stem.replace("picks-", "")
         if not week_id.startswith(month_prefix):
@@ -128,13 +128,23 @@ def handle_aggregate_daily(args: argparse.Namespace) -> None:
         for model, entries in picks_map.items():
             if not isinstance(entries, list):
                 continue
-            syms = [e.get("symbol", "") for e in entries if isinstance(e, dict)]
+            picks_list = []
+            for e in entries:
+                if not isinstance(e, dict):
+                    continue
+                picks_list.append(
+                    {
+                        "symbol": e.get("symbol", ""),
+                        "reason": e.get("reason", ""),
+                        "method": e.get("method", ""),
+                    }
+                )
             holdings.append(
                 {
                     "week_start": week_start,
                     "week_end": week_end,
                     "model": str(model),
-                    "symbols": ", ".join(syms),
+                    "picks": picks_list,
                 }
             )
 

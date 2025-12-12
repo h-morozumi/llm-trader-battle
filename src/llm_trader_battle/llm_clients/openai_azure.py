@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import os
 
 from openai import OpenAI
@@ -31,6 +32,30 @@ def _safe_model_dump(obj):
         except Exception:  # noqa: BLE001
             return None
     return None
+
+
+def _response_schema() -> dict:
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "picks": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "symbol": {"type": "string"},
+                        "reason": {"type": "string"},
+                        "method": {"type": "string"},
+                    },
+                    "required": ["symbol", "reason", "method"],
+                },
+                "minItems": 1,
+            }
+        },
+        "required": ["picks"],
+    }
 
 
 def _extract_web_search_trace(resp) -> tuple[bool | None, dict | None]:
@@ -68,14 +93,49 @@ class AzureOpenAIClient(LlmClient):
 
     def generate(self, req: PickRequest) -> PickResponse:
         prompt = build_prompt(req)
-        resp = self._client.responses.create(
-            model=self._deployment,
-            instructions="Return only JSON matching the schema. No prose, no markdown.",
-            input=[{"role": "user", "content": [{"type": "input_text", "text": prompt}]}],
-            max_output_tokens=2048,
-            reasoning=None,
-            tools=[{"type": "web_search", "search_context_size": "low"}],
-        )
+        schema = _response_schema()
+        # OpenAI Python SDK has changed how Structured Outputs is specified for the
+        # Responses API across versions/providers.
+        text_format = {
+            "type": "json_schema",
+            "name": "weekly_picks",
+            "schema": schema,
+            "strict": True,
+        }
+        response_format = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "weekly_picks",
+                "schema": schema,
+                "strict": True,
+            },
+        }
+
+        base_kwargs = {
+            "model": self._deployment,
+            "instructions": "Return only JSON matching the schema. No prose, no markdown.",
+            "input": [{"role": "user", "content": [{"type": "input_text", "text": prompt}]}],
+            "max_output_tokens": 2048,
+            "reasoning": None,
+            "tools": [{"type": "web_search", "search_context_size": "low"}],
+        }
+
+        # Prefer the modern `text.format` if available; fall back to `response_format`.
+        try:
+            params = inspect.signature(self._client.responses.create).parameters
+        except Exception:  # noqa: BLE001
+            params = {}
+
+        if "text" in params:
+            resp = self._client.responses.create(**base_kwargs, text={"format": text_format})
+        elif "response_format" in params:
+            resp = self._client.responses.create(**base_kwargs, response_format=response_format)
+        else:
+            # Last resort: try `text` then fall back.
+            try:
+                resp = self._client.responses.create(**base_kwargs, text={"format": text_format})
+            except TypeError:
+                resp = self._client.responses.create(**base_kwargs, response_format=response_format)
         if hasattr(resp, "output_text") and resp.output_text:
             text = resp.output_text
         else:

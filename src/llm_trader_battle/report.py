@@ -306,7 +306,7 @@ def update_month_summary(
     llms: List[str],
     daily_llm: Dict[str, Dict[str, float | None]],
     chart_path: Path | None = None,
-    holdings: list[dict[str, str]] | None = None,
+    holdings: list[dict[str, object]] | None = None,
 ) -> Path:
     lines: List[str] = []
     lines.append(f"# Summary {month}")
@@ -334,15 +334,34 @@ def update_month_summary(
         lines.append("")
         lines.append("## Holdings (week start → end)")
         lines.append("")
-        lines.append("| Week | Model | Symbols |")
-        lines.append("| --- | --- | --- |")
-        for h in sorted(holdings, key=lambda x: (x.get("week_start", ""), x.get("model", ""))):
+        lines.append("| Week | Model | Symbol | Reason |")
+        lines.append("| --- | --- | --- | --- |")
+
+        def _cell(s: str) -> str:
+            # Keep markdown tables stable
+            return (s or "").replace("|", "\\|").replace("\n", "<br>")
+
+        for h in sorted(holdings, key=lambda x: (str(x.get("week_start", "")), str(x.get("model", "")))):
             week = f"{h.get('week_start', '')}→{h.get('week_end', '')}"
-            model = h.get("model", "")
-            symbols_raw = h.get("symbols", "")
+            model = str(h.get("model", "") or "")
+            picks_obj = h.get("picks")
+
+            if isinstance(picks_obj, list) and picks_obj:
+                for e in picks_obj:
+                    if not isinstance(e, dict):
+                        continue
+                    sym = str(e.get("symbol", "")).strip()
+                    reason = str(e.get("reason", "")).strip()
+                    sym_disp = _format_symbol(sym) if sym else ""
+                    lines.append(f"| {_cell(week)} | {_cell(model)} | {_cell(sym_disp)} | {_cell(reason)} |")
+                continue
+
+            # Backward compatible with older holdings payloads
+            symbols_raw = str(h.get("symbols", "") or "")
             symbols = [s.strip() for s in symbols_raw.split(",") if s.strip()]
-            symbols_disp = ", ".join(_format_symbol(s) for s in symbols) if symbols else symbols_raw
-            lines.append(f"| {week} | {model} | {symbols_disp} |")
+            for sym in symbols:
+                sym_disp = _format_symbol(sym) if sym else ""
+                lines.append(f"| {_cell(week)} | {_cell(model)} | {_cell(sym_disp)} |  |")
 
     month_dir = REPORTS_DIR / month
     month_dir.mkdir(parents=True, exist_ok=True)
