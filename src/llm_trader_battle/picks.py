@@ -78,7 +78,6 @@ def generate_llm_picks(week_dir: Path, week_start: date, models: Sequence[str] |
                 picked_at_utc=now.astimezone(UTC),
             )
         )
-    save_picks(week_dir, picks)
     return picks
 
 

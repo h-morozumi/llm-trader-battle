@@ -6,7 +6,7 @@ from typing import Dict, List, Sequence
 
 from .config import DEFAULT_LLMS, JST
 from .market_calendar import next_monday, week_start_for, is_trading_day, is_week_final_trading_day, week_final_trading_day
-from .picks import generate_llm_picks, load_current_picks, save_week_and_current, week_dir_from_id
+from .picks import generate_llm_picks, load_current_picks, save_picks, save_week_and_current, week_dir_from_id
 from .prices import fetch_open_close, load_daily_prices, save_daily_prices
 from .report import (
     compute_llm_avg,
@@ -34,10 +34,12 @@ def parse_date(value: str | None) -> date:
 def handle_predict(args: argparse.Namespace) -> None:
     target_monday = date.fromisoformat(args.week_start) if args.week_start else next_monday(parse_date(None))
     week_id = target_monday.isoformat()
+    week_dir = week_dir_from_id(week_id)
     llms = args.llms or ([args.llm] if getattr(args, "llm", None) else None) or DEFAULT_LLMS
-    picks = generate_llm_picks(week_dir_from_id(week_id), target_monday, models=llms, universe=None)
+    picks = generate_llm_picks(week_dir, target_monday, models=llms, universe=None)
     if args.skip_current:
-        print(f"picks saved to {PICKS_DIR / week_id}; current.json left untouched")
+        save_picks(week_dir, picks)
+        print(f"picks saved to {PICKS_DIR / ('picks-' + week_id + '.json')}; current.json left untouched")
     else:
         save_week_and_current(week_id, picks)
         print(f"picks saved to {PICKS_DIR / week_id} and current.json")

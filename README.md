@@ -28,7 +28,7 @@ LLM（GPT / Gemini / Claude / Grok など）が週初に日本株を2銘柄ず�
 
 ## コマンド（uv 経由）
 - 週次ピック（週末実行）: `uv run llm-trader-battle predict --week-start 2025-01-06`（省略時は次の月曜を自動推定）
-        - `--skip-current` を付けると `data/picks/current.json` を上書きしません（検証用）
+        - `--skip-current` を付けると `data/picks/picks-<YYYY-MM-DD>.json` は生成しつつ、`data/picks/current.json` を上書きしません（検証用）
 - 日次価格取得（16:00以降・取引日だけ実行）: `uv run llm-trader-battle fetch-daily --date 2025-01-06`
 - 日次集計（17:00以降・取引日だけ実行）: `uv run llm-trader-battle aggregate-daily --date 2025-01-06`
 
