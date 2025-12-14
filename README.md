@@ -22,12 +22,13 @@ LLM（GPT / Gemini / Claude / Grok など）が週初に日本株を2銘柄ず�
 - `data/result/result-<YYYY-MM-DD>.json` : 日次リザルト（llm_avg と銘柄別リターン）
 - `data/result/result-<YYYY-MM-DD>.md` : 日次リザルト（Markdown）
 - `reports/<YYYYMM>/summary.md` : 月次サマリ（summary.png を埋め込み）
-- `.github/workflows/weekly-picks.yml` : 週末ピック（手動時は week_start を任意指定可）
+- `.github/workflows/weekly-picks.yml` : 週末ピック（手動時は week_start / llms / skip_current を任意指定可）
 - `.github/workflows/daily-prices.yml` : 日次価格取得（手動時は date を任意指定可）
 - `.github/workflows/daily-aggregate.yml` : 日次集計（手動時は date を任意指定可）
 
 ## コマンド（uv 経由）
 - 週次ピック（週末実行）: `uv run llm-trader-battle predict --week-start 2025-01-06`（省略時は次の月曜を自動推定）
+        - `--skip-current` を付けると `data/picks/current.json` を上書きしません（検証用）
 - 日次価格取得（16:00以降・取引日だけ実行）: `uv run llm-trader-battle fetch-daily --date 2025-01-06`
 - 日次集計（17:00以降・取引日だけ実行）: `uv run llm-trader-battle aggregate-daily --date 2025-01-06`
 
@@ -42,8 +43,8 @@ LLM（GPT / Gemini / Claude / Grok など）が週初に日本株を2銘柄ず�
 
 ### LLMを1つだけ動かす方法
 - `predict` 実行時に `--llms` で1件だけ指定します（例: GPT だけ動かす）:
-	- `uv run llm-trader-battle predict --week-start 2025-12-15 --llms gpt`
-	- 同様に `--llms gemini` / `--llms claude` / `--llms grok` で単体実行できます。
+        - `uv run llm-trader-battle predict --week-start 2025-12-15 --llms gpt`
+        - 同様に `--llms gemini` / `--llms claude` / `--llms grok` で単体実行できます。
 
 ## Debug（LLM出力・ツール使用の可視化）
 

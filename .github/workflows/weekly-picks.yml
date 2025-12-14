@@ -7,6 +7,14 @@ on:
         description: "Week start Monday (YYYY-MM-DD, JST)"
         required: false
         type: string
+      llms:
+        description: "LLM model names (space-separated)"
+        required: false
+        type: string
+      skip_current:
+        description: "Do not overwrite data/picks/current.json"
+        required: false
+        type: boolean
   schedule:
     - cron: "0 23 * * SAT" # 08:00 Sunday JST (week前日)
 
@@ -28,6 +36,8 @@ jobs:
       - name: Generate placeholder picks for next week
         env:
           WEEK_START: ${{ github.event.inputs.week_start || '' }}
+          LLMS: ${{ github.event.inputs.llms || '' }}
+          SKIP_CURRENT: ${{ github.event.inputs.skip_current || 'false' }}
           # LLM provider secrets (required when running `predict`)
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           CLAUDE_MODEL: ${{ secrets.CLAUDE_MODEL }}
@@ -48,11 +58,17 @@ jobs:
           XAI_ENDPOINT: ${{ secrets.XAI_ENDPOINT }}
           XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
         run: |
+          args=(uv run llm-trader-battle predict)
           if [ -n "$WEEK_START" ]; then
-            uv run llm-trader-battle predict --week-start "$WEEK_START"
-          else
-            uv run llm-trader-battle predict
+            args+=(--week-start "$WEEK_START")
           fi
+          if [ -n "$LLMS" ]; then
+            args+=(--llms $LLMS)
+          fi
+          if [ "$SKIP_CURRENT" = "true" ]; then
+            args+=(--skip-current)
+          fi
+          "${args[@]}"
       - name: Commit and push
         env:
           TZ: UTC

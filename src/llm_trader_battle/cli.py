@@ -36,8 +36,11 @@ def handle_predict(args: argparse.Namespace) -> None:
     week_id = target_monday.isoformat()
     llms = args.llms or ([args.llm] if getattr(args, "llm", None) else None) or DEFAULT_LLMS
     picks = generate_llm_picks(week_dir_from_id(week_id), target_monday, models=llms, universe=None)
-    save_week_and_current(week_id, picks)
-    print(f"picks saved to {PICKS_DIR / week_id} and current.json")
+    if args.skip_current:
+        print(f"picks saved to {PICKS_DIR / week_id}; current.json left untouched")
+    else:
+        save_week_and_current(week_id, picks)
+        print(f"picks saved to {PICKS_DIR / week_id} and current.json")
 
 
 def handle_fetch_daily(args: argparse.Namespace) -> None:
@@ -197,6 +200,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     p_pick.add_argument("--week-start", type=str, help="Week start Monday (YYYY-MM-DD). Default: next Monday from today (JST)")
     p_pick.add_argument("--llms", nargs="+", help="LLM model names")
     p_pick.add_argument("--llm", help="LLM model name (alias for --llms with single value)")
+    p_pick.add_argument("--skip-current", action="store_true", help="Do not overwrite data/picks/current.json")
     p_pick.set_defaults(func=handle_predict)
 
     p_fetch = sub.add_parser("fetch-daily", help="Fetch today's open/close for current picks")
