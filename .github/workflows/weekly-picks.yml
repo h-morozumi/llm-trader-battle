@@ -63,7 +63,8 @@ jobs:
             args+=(--week-start "$WEEK_START")
           fi
           if [ -n "$LLMS" ]; then
-            args+=(--llms $LLMS)
+            read -ra llm_array <<< "$LLMS"
+            args+=(--llms "${llm_array[@]}")
           fi
           if [ "$SKIP_CURRENT" = "true" ]; then
             args+=(--skip-current)
