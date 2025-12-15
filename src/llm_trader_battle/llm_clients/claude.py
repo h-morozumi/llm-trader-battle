@@ -53,8 +53,13 @@ async def _run_claude(prompt: str, model: str) -> tuple[str, dict]:
     last_text: str | None = None
     last_result: str | None = None
     last_structured: object | None = None
+    error_message: str | None = None
     tool_uses: list[dict] = []
     tool_results: list[dict] = []
+    # IMPORTANT: don't raise inside the async generator loop.
+    # Some SDK versions use AnyIO cancel scopes that can emit noisy errors
+    # if the generator is aborted mid-iteration. Capture the error and break,
+    # allowing the generator to close cleanly within this task.
     async for message in query(prompt=prompt, options=opts):
         if isinstance(message, AssistantMessage):
             parts: list[str] = []
@@ -81,7 +86,8 @@ async def _run_claude(prompt: str, model: str) -> tuple[str, dict]:
                 last_text = "".join(parts)
         elif isinstance(message, ResultMessage):
             if message.is_error:
-                raise RuntimeError(message.result or "Claude agent returned an error")
+                error_message = message.result or "Claude agent returned an error"
+                break
             if message.structured_output is not None:
                 last_structured = message.structured_output
             if isinstance(message.result, str) and message.result.strip():
@@ -94,6 +100,9 @@ async def _run_claude(prompt: str, model: str) -> tuple[str, dict]:
         "tool_use_count": len(tool_uses),
         "tool_names": sorted({t.get("name") for t in tool_uses if t.get("name")}),
     }
+
+    if error_message:
+        raise RuntimeError(error_message)
 
     if isinstance(last_structured, dict) and last_structured:
         return json.dumps(last_structured, ensure_ascii=False), tool_trace
@@ -113,7 +122,10 @@ class ClaudeClient(LlmClient):
 
     def generate(self, req: PickRequest) -> PickResponse:
         prompt = build_prompt(req)
-        text, tool_trace = asyncio.run(_run_claude(prompt, self._model))
+        try:
+            text, tool_trace = asyncio.run(_run_claude(prompt, self._model))
+        except RuntimeError as e:
+            raise RuntimeError(f"Claude ({self._model}) failed: {e}") from e
         parsed = parse_picks_json(text)
         parsed.tool_trace = tool_trace
         parsed.tool_used = bool(tool_trace.get("tool_uses"))
