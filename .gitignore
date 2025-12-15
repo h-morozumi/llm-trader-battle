@@ -8,3 +8,6 @@ __pycache__/
 .idea/
 .ruff_cache/
 .pytest_cache/
+
+# Dev Containers: local overrides (host-specific)
+.devcontainer/devcontainer.local.json

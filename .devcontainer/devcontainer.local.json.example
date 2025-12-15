@@ -1,0 +1,6 @@
+{
+  "image": "mcr.microsoft.com/devcontainers/python:3.12",
+  "containerEnv": {
+    "UV_PROJECT_ENVIRONMENT": "/home/vscode/.venv-llm-trader-battle"
+  }
+}

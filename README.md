@@ -41,6 +41,17 @@ LLM（GPT / Gemini / Claude / Grok など）が週初に日本株を2銘柄ず�
 - `export UV_PROJECT_ENVIRONMENT="$HOME/.venv-llm-trader-battle"`
 - `uv sync`
 
+### Dev Container（Macだけ別imageにしたい場合）
+Dev Containers にはOSごとの条件分岐がないため、**リポジトリ既定は Windows/Codespaces 向け**にして、Mac だけローカルoverrideで差し替える運用にしています。
+
+- 既定: `.devcontainer/devcontainer.json`（`mcr.microsoft.com/devcontainers/universal:linux`）
+- Mac用override: `.devcontainer/devcontainer.local.json`（git管理しません）
+
+Macでは次を実行してください:
+
+- `.devcontainer/devcontainer.local.json.example` を `.devcontainer/devcontainer.local.json` にコピー
+- `Dev Containers: Rebuild and Reopen in Container`
+
 ### LLMを1つだけ動かす方法
 - `predict` 実行時に `--llms` で1件だけ指定します（例: GPT だけ動かす）:
         - `uv run llm-trader-battle predict --week-start 2025-12-15 --llms gpt`
