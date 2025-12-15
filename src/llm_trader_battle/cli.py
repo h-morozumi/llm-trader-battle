@@ -42,7 +42,7 @@ def handle_predict(args: argparse.Namespace) -> None:
         print(f"picks saved to {flat_picks_json_path(week_id)}; current.json left untouched")
     else:
         save_week_and_current(week_id, picks)
-        print(f"picks saved to {PICKS_DIR / week_id} and current.json")
+        print(f"picks saved to {PICKS_DIR / ('picks-' + week_id + '.json')} and current.json")
 
 
 def handle_fetch_daily(args: argparse.Namespace) -> None:
