@@ -20,7 +20,7 @@ from .report import (
     update_month_summary,
     save_week_final_report,
 )
-from .storage import PICKS_DIR, PRICES_DIR, RESULTS_DIR, REPORTS_DIR, load_json_optional
+from .storage import PICKS_DIR, PRICES_DIR, RESULTS_DIR, REPORTS_DIR, load_json_optional, flat_picks_json_path
 
 
 def parse_date(value: str | None) -> date:
@@ -39,7 +39,7 @@ def handle_predict(args: argparse.Namespace) -> None:
     picks = generate_llm_picks(week_dir, target_monday, models=llms, universe=None)
     if args.skip_current:
         save_picks(week_dir, picks)
-        print(f"picks saved to {PICKS_DIR / ('picks-' + week_id + '.json')}; current.json left untouched")
+        print(f"picks saved to {flat_picks_json_path(week_id)}; current.json left untouched")
     else:
         save_week_and_current(week_id, picks)
         print(f"picks saved to {PICKS_DIR / week_id} and current.json")
