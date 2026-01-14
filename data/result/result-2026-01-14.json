@@ -1,0 +1,45 @@
+{
+  "date": "2026-01-14",
+  "llm_models": {
+    "claude": "claude-sonnet-4-5-20250929",
+    "gemini": "gemini-3-pro-preview",
+    "gpt": "gpt-5.1",
+    "grok": "grok-4-1-fast-reasoning"
+  },
+  "llm_avg": {
+    "claude": 0.06589329910586145,
+    "gemini": 0.04458327461756463,
+    "gpt": 0.050325243491991446,
+    "grok": 0.2484645826239338
+  },
+  "per_symbol": {
+    "9983.T": {
+      "buy_open": 65880.0,
+      "close": 65160.0
+    },
+    "6857.T": {
+      "buy_open": 20180.0,
+      "close": 23060.0
+    },
+    "8306.T": {
+      "buy_open": 2617.5,
+      "close": 2879.5
+    },
+    "8035.T": {
+      "buy_open": 41000.0,
+      "close": 42310.0
+    },
+    "6501.T": {
+      "buy_open": 5051.0,
+      "close": 5398.0
+    },
+    "6330.T": {
+      "buy_open": 4120.0,
+      "close": 6370.0
+    },
+    "485A.T": {
+      "buy_open": 2338.0,
+      "close": 2223.0
+    }
+  }
+}
