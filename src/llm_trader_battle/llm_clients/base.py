@@ -7,6 +7,9 @@ from textwrap import dedent
 from typing import Iterable, Protocol, Sequence
 
 
+import re
+
+
 def _normalize_symbol(sym: str) -> str:
     sym = sym.strip()
     # If LLM returned only digits (common for JP tickers), append .T for TSE.
@@ -37,6 +40,66 @@ class LlmClient(Protocol):
     def generate(self, req: PickRequest) -> PickResponse: ...
 
 
+def _try_repair_truncated_json(s: str) -> str | None:
+    """Attempt to repair a truncated JSON by closing open structures."""
+    # Count brackets
+    open_braces = s.count("{") - s.count("}")
+    open_brackets = s.count("[") - s.count("]")
+
+    if open_braces <= 0 and open_brackets <= 0:
+        return None  # Not a truncation issue
+
+    repaired = s.rstrip()
+    # Check if we're in the middle of a string (odd number of unescaped quotes)
+    in_string = False
+    i = 0
+    while i < len(repaired):
+        c = repaired[i]
+        if c == "\\" and i + 1 < len(repaired):
+            i += 2
+            continue
+        if c == '"':
+            in_string = not in_string
+        i += 1
+
+    if in_string:
+        repaired += '"'
+
+    # Remove incomplete key-value pair at end (e.g., ',"key":"incomplete' -> ',"key":"incomplete"')
+    # After closing the string, check if we have a trailing incomplete pair
+    repaired = repaired.rstrip()
+
+    # Remove trailing comma if present
+    if repaired.endswith(","):
+        repaired = repaired[:-1]
+
+    # Close brackets and braces in order
+    repaired += "]" * open_brackets + "}" * open_braces
+    return repaired
+
+
+def _extract_picks_with_regex(text: str) -> list[dict]:
+    """Extract pick objects using regex as fallback when JSON is malformed."""
+    picks = []
+    # Pattern to find symbol values in the JSON
+    symbol_pattern = re.compile(r'"symbol"\s*:\s*"([^"]+)"')
+    reason_pattern = re.compile(r'"reason"\s*:\s*"([^"]*)')
+    method_pattern = re.compile(r'"method"\s*:\s*"([^"]*)')
+
+    symbols = symbol_pattern.findall(text)
+    reasons = reason_pattern.findall(text)
+    methods = method_pattern.findall(text)
+
+    for i, sym in enumerate(symbols):
+        pick = {
+            "symbol": sym,
+            "reason": reasons[i] if i < len(reasons) else "",
+            "method": methods[i] if i < len(methods) else "",
+        }
+        picks.append(pick)
+    return picks
+
+
 def parse_picks_json(text: str) -> PickResponse:
     """Parse JSON of shape {"picks":[{"symbol":"7203.T","reason":"...","method":"..."}, ...]}"""
     raw_text = text
@@ -64,8 +127,15 @@ def parse_picks_json(text: str) -> PickResponse:
         if start < 0:
             return json.loads(s)
         decoder = json.JSONDecoder()
-        obj, end = decoder.raw_decode(s[start:])
-        return obj
+        try:
+            obj, end = decoder.raw_decode(s[start:])
+            return obj
+        except json.JSONDecodeError:
+            # Try to repair truncated JSON
+            repaired = _try_repair_truncated_json(s[start:])
+            if repaired:
+                return json.loads(repaired)
+            raise
 
     try:
         data = _parse_first_json_object(text)
@@ -74,10 +144,34 @@ def parse_picks_json(text: str) -> PickResponse:
         s = _strip_code_fences(text)
         start = s.find("{")
         end = s.rfind("}")
+        data = None
         if 0 <= start < end:
-            data = json.loads(s[start : end + 1].strip())
-        else:
-            raise
+            try:
+                data = json.loads(s[start : end + 1].strip())
+            except json.JSONDecodeError:
+                # Try repair on the carved portion
+                repaired = _try_repair_truncated_json(s[start:])
+                if repaired:
+                    try:
+                        data = json.loads(repaired)
+                    except json.JSONDecodeError:
+                        pass
+        elif start >= 0:
+            # No closing brace at all - try repair
+            repaired = _try_repair_truncated_json(s[start:])
+            if repaired:
+                try:
+                    data = json.loads(repaired)
+                except json.JSONDecodeError:
+                    pass
+
+        # Ultimate fallback: regex extraction
+        if data is None:
+            regex_picks = _extract_picks_with_regex(text)
+            if regex_picks:
+                data = {"picks": regex_picks}
+            else:
+                raise ValueError(f"Could not parse picks from LLM response: {text[:500]}")
     picks = data.get("picks") if isinstance(data, dict) else None
     if not isinstance(picks, Iterable):
         raise ValueError("invalid picks payload")

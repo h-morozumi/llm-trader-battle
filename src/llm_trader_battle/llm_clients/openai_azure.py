@@ -115,7 +115,7 @@ class AzureOpenAIClient(LlmClient):
             "model": self._deployment,
             "instructions": "Return only JSON matching the schema. No prose, no markdown.",
             "input": [{"role": "user", "content": [{"type": "input_text", "text": prompt}]}],
-            "max_output_tokens": 2048,
+            "max_output_tokens": 4096,
             "reasoning": None,
             "tools": [{"type": "web_search", "search_context_size": "low"}],
         }
