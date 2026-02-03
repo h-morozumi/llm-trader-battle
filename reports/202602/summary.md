@@ -11,6 +11,9 @@
 
 | Date | claude | gemini | gpt | grok |
 | --- | --- | --- | --- | --- |
+| 2026-02-02 | -2.78% | -2.85% | -1.30% | -1.18% |
+
+![LLM monthly returns](summary.png)
 
 ## Holdings (week start → end)
 

@@ -7,35 +7,35 @@
     "grok": "grok-4-1-fast-reasoning"
   },
   "llm_avg": {
-    "claude": null,
-    "gemini": null,
-    "gpt": null,
-    "grok": null
+    "claude": -0.02778572411849152,
+    "gemini": -0.02850772451551898,
+    "gpt": -0.013029718112485513,
+    "grok": -0.01181989942642237
   },
   "per_symbol": {
     "8316.T": {
-      "buy_open": null,
-      "close": null
+      "buy_open": 5550.0,
+      "close": 5286.0
     },
     "9984.T": {
-      "buy_open": null,
-      "close": null
+      "buy_open": 4123.0,
+      "close": 4090.0
     },
     "8306.T": {
-      "buy_open": null,
-      "close": null
+      "buy_open": 2854.5,
+      "close": 2744.0
     },
     "7011.T": {
-      "buy_open": null,
-      "close": null
+      "buy_open": 4589.0,
+      "close": 4505.0
     },
     "7203.T": {
-      "buy_open": null,
-      "close": null
+      "buy_open": 3600.0,
+      "close": 3535.0
     },
     "4186.T": {
-      "buy_open": null,
-      "close": null
+      "buy_open": 7310.0,
+      "close": 7271.0
     }
   }
 }
