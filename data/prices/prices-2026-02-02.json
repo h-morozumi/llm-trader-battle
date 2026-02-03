@@ -1,38 +1,38 @@
 {
-  "4186.T": {
-    "open": null,
-    "high": null,
-    "low": null,
-    "close": null
+  "8306.T": {
+    "open": 2854.5,
+    "high": 2855.0,
+    "low": 2744.0,
+    "close": 2744.0
   },
   "9984.T": {
-    "open": null,
-    "high": null,
-    "low": null,
-    "close": null
-  },
-  "8306.T": {
-    "open": null,
-    "high": null,
-    "low": null,
-    "close": null
-  },
-  "7011.T": {
-    "open": null,
-    "high": null,
-    "low": null,
-    "close": null
-  },
-  "8316.T": {
-    "open": null,
-    "high": null,
-    "low": null,
-    "close": null
+    "open": 4123.0,
+    "high": 4270.0,
+    "low": 4068.0,
+    "close": 4090.0
   },
   "7203.T": {
-    "open": null,
-    "high": null,
-    "low": null,
-    "close": null
+    "open": 3600.0,
+    "high": 3627.0,
+    "low": 3516.0,
+    "close": 3535.0
+  },
+  "4186.T": {
+    "open": 7310.0,
+    "high": 7631.0,
+    "low": 7250.0,
+    "close": 7271.0
+  },
+  "8316.T": {
+    "open": 5550.0,
+    "high": 5554.0,
+    "low": 5286.0,
+    "close": 5286.0
+  },
+  "7011.T": {
+    "open": 4589.0,
+    "high": 4649.0,
+    "low": 4465.0,
+    "close": 4505.0
   }
 }
