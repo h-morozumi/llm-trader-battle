@@ -1,5 +1,9 @@
 # llm-trader-battle
 
+> **Description**: A weekly stock-picking battle where LLMs (GPT, Gemini, Claude, Grok) each pick 2 Japanese stocks and compete on weekly returns — fully automated via GitHub Actions. No actual trading involved.
+
+> **Topics**: `llm` `ai` `stock-market` `japan-stock` `trading-simulation` `gpt` `gemini` `claude` `grok` `python` `github-actions` `yfinance` `weekly-challenge` `openai` `generative-ai`
+
 LLM（GPT / Gemini / Claude / Grok など）が週初に日本株を2銘柄ずつピックし、その週のリターンを比較するゲーム用ツールです。実際の売買は行いません。ピック対象の銘柄は LLM が自分で考えて選びます。
 
 ## ゲームルール（週次）

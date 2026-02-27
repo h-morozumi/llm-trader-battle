@@ -1,7 +1,7 @@
 [project]
 name = "llm-trader-battle"
 version = "0.1.0"
-description = "LLMごとの日本株ピック結果を週次で比較するトレーダーバトル"
+description = "A weekly stock-picking battle where LLMs (GPT, Gemini, Claude, Grok) each pick 2 Japanese stocks and compete on weekly returns via GitHub Actions."
 readme = "README.md"
 authors = [
     { name = "h-morozumi" }
