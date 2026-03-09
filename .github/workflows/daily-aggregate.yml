@@ -7,8 +7,6 @@ on:
         description: "Target date (YYYY-MM-DD, JST)"
         required: false
         type: string
-  schedule:
-    - cron: "0 8 * * *" # 17:00 JST daily
 
 concurrency:
   group: daily-aggregate

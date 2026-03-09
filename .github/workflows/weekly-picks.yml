@@ -15,8 +15,6 @@ on:
         description: "Do not overwrite data/picks/current.json"
         required: false
         type: boolean
-  schedule:
-    - cron: "0 23 * * SAT" # 08:00 Sunday JST (week前日)
 
 concurrency:
   group: weekly-picks
